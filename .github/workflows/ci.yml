@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  shell:
+    name: Shell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax check
+        run: |
+          for f in $(git ls-files '*.sh'); do
+            if head -1 "$f" | grep -q 'bin/sh'; then sh -n "$f"; else bash -n "$f"; fi
+          done
+      - name: ShellCheck
+        # SC2034 (unused variable) is a false positive on throwaway loop counters here.
+        run: shellcheck -S warning -e SC2034 $(git ls-files '*.sh')
+
+  python:
+    name: Python scripts and admission policy tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Syntax check
+        run: python -m compileall -q $(git ls-files '*.py')
+      - name: Evaluate the CEL admission policies
+        run: |
+          pip install cel-python pyyaml
+          python proteccion/probar-politicas-cel.py
+
+  yaml:
+    name: YAML lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: yamllint
+        run: |
+          pip install yamllint
+          yamllint .
+
+  chart:
+    name: Helm chart
+    runs-on: ubuntu-latest
+    env:
+      KUBECONFORM_VERSION: v0.6.7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Lint
+        run: |
+          helm lint chart/kubeops-app \
+            --set app=demo --set image.tag=abc12345 --set ingress.host=demo.example.com
+      - name: Render the example application
+        run: |
+          helm template demo chart/kubeops-app -f hola-k8s/deploy/values.yaml \
+            --set app=demo --set image.registry=harbor.example.com/apps \
+            --set image.tag=abc12345 --set ingress.host=demo.example.com > rendered.yaml
+      - name: Validate against the Kubernetes schemas
+        run: |
+          curl -sSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" | tar xz kubeconform
+          ./kubeconform -strict -summary -ignore-missing-schemas \
+            rendered.yaml 00-namespaces.yaml 10-rbac.yaml 20-admission-policy.yaml legacy/ci-deploy-solo-app-policy.yaml

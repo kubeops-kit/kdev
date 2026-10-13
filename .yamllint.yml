@@ -1,0 +1,7 @@
+extends: relaxed
+
+ignore: |
+  chart/kubeops-app/templates/
+
+rules:
+  line-length: disable

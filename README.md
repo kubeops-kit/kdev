@@ -29,6 +29,19 @@ repository (`example.com`, etc.) are placeholders.
 Tokens are passed through environment variables (`GITLAB_TOKEN`, `HARBOR_PASS`); they are never
 stored in the repository.
 
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every push to `main` and on pull requests:
+
+| Job | What it checks |
+|---|---|
+| Shell scripts | Syntax (`bash -n` / `sh -n`) and ShellCheck on every `.sh` |
+| Python scripts and admission policy tests | Syntax, and the 32 CEL cases of `proteccion/probar-politicas-cel.py` against `20-admission-policy.yaml` |
+| YAML lint | `yamllint .` (config in `.yamllint.yml`) |
+| Helm chart | `helm lint`, a render of the example application, and `kubeconform` on the rendered output and the cluster manifests |
+
+To run the first three locally: `pip install shellcheck-py yamllint cel-python pyyaml`, then the same commands as in the workflow.
+
 ## Language
 
 Documentation and code comments are in English. The scripts' subcommands, output messages and
