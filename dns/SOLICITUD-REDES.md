@@ -1,291 +1,291 @@
-# DNS y balanceador para la plataforma de desarrollo
+# DNS and load balancer for the development platform
 
-Para que las direcciones de los entornos, de KubeDev y de las aplicaciones en producción abran desde el
-navegador. Tiene tres partes: lo que se pide a redes (con un texto listo para el ticket), lo que cambia por
-nuestra parte y cómo comprobar, escalón a escalón, que funciona.
+So that the addresses of the environments, of KubeDev and of the production applications open from the
+browser. It has three parts: what is requested from the network team (with a text ready for the ticket), what changes on
+our side, and how to check, step by step, that it works.
 
-Hoy las aplicaciones responden **dentro del clúster**: se prueban con `curl` contra la IP de un nodo y la
-cabecera `Host`. Lo que falta es que el nombre resuelva y que el balanceador lo lleve hasta ahí.
+Today the applications respond **inside the cluster**: they are tested with `curl` against a node's IP and the
+`Host` header. What is missing is for the name to resolve and for the load balancer to take it from there.
 
 ```text
-Navegador ──► DNS ──► A10 (HTTPS) ──► nodos del clúster (HTTP, puerto 80) ──► Traefik ──► Service ──► Pod
-              ▲          ▲
-        lo que falta   lo que falta
+Browser ──► DNS ──► A10 (HTTPS) ──► cluster nodes (HTTP, port 80) ──► Traefik ──► Service ──► Pod
+             ▲          ▲
+        what is missing  what is missing
 ```
 
-## A qué IP apuntan los nombres
+## Which IP the names point to
 
-**Todos los nombres apuntan a una sola IP: la del VIP del balanceador A10.** No a las IP de los nodos.
+**All names point to a single IP: the A10 load balancer's VIP.** Not to the nodes' IPs.
 
-- El A10 termina el HTTPS. Si el DNS apuntara a un nodo, el navegador hablaría con Traefik, que por dentro solo sirve HTTP.
-- El A10 reparte entre los nodos y retira los que no responden. Un nodo apuntado a pelo es un punto único de fallo.
-- Las IP de los nodos van en el **pool de servidores reales del A10**, que configura redes. No van en el DNS.
+- The A10 terminates HTTPS. If DNS pointed to a node, the browser would talk to Traefik, which internally only serves HTTP.
+- The A10 spreads traffic across the nodes and removes those that do not respond. A node pointed at directly is a single point of failure.
+- The nodes' IPs go in the **A10's real-server pool**, which the network team configures. They do not go in DNS.
 
-El VIP es el de cualquier aplicación del clúster que ya salga por el A10:
+The VIP is that of any cluster application that already goes out through the A10:
 
 ```bash
-getent ahostsv4 <nombre-de-una-app-que-ya-abre-por-el-A10> | head -1
+getent ahostsv4 <name-of-an-app-that-already-opens-through-the-A10> | head -1
 ```
 
-Esa es la IP de los tres registros, y la que se pone en `export VIP=` al usar `comprobar.sh`.
+That is the IP of the three records, and the one to put in `export VIP=` when using `comprobar.sh`.
 
-**Alternativa temporal, solo para pruebas internas:** mientras no esté el A10, los nombres pueden apuntar
-directamente a las IP de los nodos, con varios registros A. Funciona solo por HTTP (sin certificado, y con
-`COOKIE_SECURE=false` en KubeDev) y el DNS no comprueba si un nodo está vivo. Hay que cambiarlo por el VIP en
-cuanto exista.
+**Temporary alternative, for internal testing only:** until the A10 is available, the names can point
+directly to the nodes' IPs, with several A records. It only works over HTTP (no certificate, and with
+`COOKIE_SECURE=false` in KubeDev) and DNS does not check whether a node is alive. It has to be replaced with the VIP
+as soon as it exists.
 
-### Registro A o alias (CNAME)
+### A record or alias (CNAME)
 
-Los dos valen. Lo que cambia es el mantenimiento:
+Both work. What changes is maintenance:
 
 | | Host (A) | Alias (CNAME) |
 |---|---|---|
-| Apunta a | La IP del VIP | Un **nombre** que ya resuelva al A10 (nunca una IP) |
-| Si el VIP cambia | Hay que tocar los tres registros | Se toca un solo registro |
+| Points to | The VIP's IP | A **name** that already resolves to the A10 (never an IP) |
+| If the VIP changes | All three records must be touched | A single record is touched |
 
-Lo más coherente es **hacer lo mismo que las aplicaciones que ya salen por el A10**. Se ve con
-`nslookup <nombre-de-esa-app>`: si dice «canonical name = …», son alias y los nuestros apuntan al mismo destino;
-si solo da una IP, son hosts. Si se quiere alias y no hay un nombre del A10, se crea uno una vez:
+The most consistent choice is to **do the same as the applications that already go out through the A10**. You can see it with
+`nslookup <name-of-that-app>`: if it says "canonical name = …", they are aliases and ours point to the same target;
+if it only gives an IP, they are hosts. If you want an alias and there is no A10 name, create one once:
 
 ```text
-entrada-k8s.example.com     A       <IP-del-VIP>
+entrada-k8s.example.com     A       <VIP-IP>
 *.dev.example.com           CNAME   entrada-k8s.example.com.
 *.apps.example.com          CNAME   entrada-k8s.example.com.
 kdev.example.com            CNAME   entrada-k8s.example.com.
 ```
 
-En BIND, el punto final del destino es obligatorio. El certificado debe cubrir el nombre que escribe el
-usuario, no el nombre al que apunta el alias. Un alias no puede coexistir con otro registro del mismo nombre.
+In BIND, the trailing dot on the target is mandatory. The certificate must cover the name the user
+types, not the name the alias points to. An alias cannot coexist with another record of the same name.
 
-## 1. Qué se pide a redes
+## 1. What is requested from the network team
 
-Texto para pegar en el ticket. Sustituye los datos entre corchetes.
+Text to paste into the ticket. Replace the data in square brackets.
 
-> **Asunto:** DNS y balanceador A10 para la plataforma de desarrollo en Kubernetes
+> **Subject:** DNS and A10 load balancer for the Kubernetes development platform
 >
-> Necesitamos publicar tres tipos de nombres en el balanceador A10, hacia los nodos del clúster Kubernetes:
+> We need to publish three kinds of names on the A10 load balancer, towards the Kubernetes cluster nodes:
 >
-> | Nombre | Para qué | Registro |
+> | Name | Purpose | Record |
 > |---|---|---|
-> | `*.dev.example.com` | Un entorno de pruebas por cada rama de desarrollo, creados y borrados automáticamente | A (o CNAME) → `[IP del VIP del A10]` |
-> | `kdev.example.com` | Portal de desarrollo (KubeDev) | A → `[IP del VIP]` |
-> | `*.apps.example.com` | Aplicaciones en producción: una por nombre (`hola-k8s.apps…`, `facturas.apps…`). Con el comodín no hará falta pedir nada por cada aplicación nueva | A (o CNAME) → `[IP del VIP]` |
+> | `*.dev.example.com` | One test environment per development branch, created and deleted automatically | A (or CNAME) → `[A10 VIP IP]` |
+> | `kdev.example.com` | Development portal (KubeDev) | A → `[VIP IP]` |
+> | `*.apps.example.com` | Production applications: one per name (`hola-k8s.apps…`, `facturas.apps…`). With the wildcard, nothing will need to be requested for each new application | A (or CNAME) → `[VIP IP]` |
 >
-> En el A10, para esos nombres (si ya existe un servicio virtual para otras aplicaciones del clúster, basta
-> con añadirlos a él):
+> On the A10, for those names (if a virtual service already exists for other cluster applications, it is enough
+> to add them to it):
 >
-> 1. **Servicio virtual** en el VIP, puertos 443 y 80. El 80 puede redirigir al 443.
-> 2. **Certificado** que cubra `*.dev.example.com`, `*.apps.example.com` y `kdev.example.com`:
->    un certificado con varios nombres, o uno por nombre con SNI. Un comodín `*.dev…` **no** cubre `*.apps…`
->    ni `kdev.example…`, son niveles distintos.
-> 3. **Servidores reales**: los nodos del clúster, puerto **80 (HTTP)**. Lista: `[IP de los nodos]`.
-> 4. **Comprobación de salud**: TCP al puerto 80.
-> 5. **Cabeceras**: conservar `Host` tal cual, y añadir `X-Forwarded-For` y `X-Forwarded-Proto: https`.
-> 6. **Tiempo de inactividad** de la conexión de al menos 60 segundos.
+> 1. **Virtual service** on the VIP, ports 443 and 80. Port 80 may redirect to 443.
+> 2. **Certificate** covering `*.dev.example.com`, `*.apps.example.com` and `kdev.example.com`:
+>    one certificate with several names, or one per name with SNI. A `*.dev…` wildcard does **not** cover `*.apps…`
+>    nor `kdev.example…`; they are different levels.
+> 3. **Real servers**: the cluster nodes, port **80 (HTTP)**. List: `[node IPs]`.
+> 4. **Health check**: TCP to port 80.
+> 5. **Headers**: keep `Host` as is, and add `X-Forwarded-For` and `X-Forwarded-Proto: https`.
+> 6. **Connection idle timeout** of at least 60 seconds.
 >
-> Después de aplicarlo, avisadnos para validarlo desde nuestro lado.
+> Once applied, let us know so we can validate it from our side.
 
-Para rellenar los corchetes:
+To fill in the brackets:
 
 ```bash
-kubectl get nodes -o wide           # columna INTERNAL-IP: las IP de los nodos
+kubectl get nodes -o wide           # INTERNAL-IP column: the nodes' IPs
 ```
 
-La IP del VIP es la que ya usa el A10 para las demás aplicaciones del clúster (GLPI, Redmine…): se ve con
-`nslookup` de cualquiera de sus nombres.
+The VIP's IP is the one the A10 already uses for the other cluster applications (GLPI, Redmine…): you can see it with
+`nslookup` of any of their names.
 
-### Por qué un comodín también para producción
+### Why a wildcard for production too
 
-Las **versiones** nunca necesitan DNS: el nombre identifica una aplicación o una rama, y la versión nueva es otra
-imagen detrás del mismo nombre. Las **ramas** ya van por un comodín (`*.dev…`). Lo único que obligaría a un
-trámite por cada aplicación es que sus nombres de producción cuelguen de `example.com`.
+**Versions** never need DNS: the name identifies an application or a branch, and the new version is another
+image behind the same name. **Branches** already go through a wildcard (`*.dev…`). The only thing that would force a
+request for each application is having their production names hang directly from `example.com`.
 
-| Opción | Cómo queda | Cuándo conviene |
+| Option | How it ends up | When it fits |
 |---|---|---|
-| **B. Un subdominio con comodín** (recomendada) | `*.apps.example.com`: las aplicaciones quedan en `hola-k8s.apps.example.com`. Un solo trámite | Siempre que se espere más de un puñado de aplicaciones. Hay que cambiar `PROD_DOMAIN` en la plantilla |
-| A. Un registro por aplicación | `hola-k8s.example.com`, uno por cada aplicación | Pocas aplicaciones y un nombre sin `apps.` |
+| **B. A subdomain with a wildcard** (recommended) | `*.apps.example.com`: applications end up at `hola-k8s.apps.example.com`. A single request | Whenever more than a handful of applications are expected. `PROD_DOMAIN` has to be changed in the template |
+| A. One record per application | `hola-k8s.example.com`, one for each application | Few applications and a name without `apps.` |
 
-Un comodín directamente en `example.com` (`*.example.com`) es mala idea: tapa errores de nombres y
-suele estar prohibido. Una aplicación que necesite un nombre propio (por ejemplo `facturas.example.com`)
-puede seguir teniéndolo: se pide su registro y ese proyecto sobrescribe `PROD_DOMAIN` en su `.gitlab-ci.yml`.
+A wildcard directly on `example.com` (`*.example.com`) is a bad idea: it hides naming mistakes and
+is usually forbidden. An application that needs its own name (for example `facturas.example.com`)
+can still have it: its record is requested and that project overrides `PROD_DOMAIN` in its `.gitlab-ci.yml`.
 
-Con un comodín, cualquier nombre bajo `apps.` llega a Traefik aunque la aplicación no exista (responde 404). Es
-inofensivo, pero recuerda que hoy el runner de ramas puede crear un Ingress con **cualquier nombre**, también
-el de producción de otra aplicación. Se cierra con una regla del clúster que limite sus nombres a `*.dev…`, y encaja
-en la propuesta de separar los permisos de ramas y producción (`propuestas/proteccion-produccion/`).
+With a wildcard, any name under `apps.` reaches Traefik even if the application does not exist (it answers 404). That is
+harmless, but remember that today the branch runner can create an Ingress with **any name**, including
+the production name of another application. This is closed with a cluster rule limiting its names to `*.dev…`, and it fits
+the proposal to separate branch and production permissions (`propuesta-proteccion/`).
 
-## 2. Qué cambia por nuestra parte
+## 2. What changes on our side
 
-### Dónde se define cada nombre
+### Where each name is defined
 
-Los pods **no** conocen su dirección ni hay que cambiarles nada. La dirección la fija el Ingress, que crea el
-pipeline a partir de tres sitios. Si un dominio cambia, se cambia en su sitio y en ningún otro:
+The pods do **not** know their address and nothing has to be changed in them. The address is set by the Ingress, which the
+pipeline creates from three places. If a domain changes, it is changed in its place and nowhere else:
 
-| Nombre | Dónde se define | Qué hacer si cambia |
+| Name | Where it is defined | What to do if it changes |
 |---|---|---|
-| Entornos de rama (`<entorno>-<app>.dev.example.com`) | `DEV_DOMAIN` en la plantilla | Cambiar la variable. Los entornos nuevos salen con el dominio nuevo; los que ya existían lo conservan hasta su siguiente push o hasta caducar (7 días) |
-| Producción (`<app>.<dominio>`) | `PROD_DOMAIN` en la plantilla (o en el `.gitlab-ci.yml` de un proyecto, para un nombre propio) | Cambiar la variable. Vale en el siguiente `deploy_prod` |
-| KubeDev | `host` de `kdev/k8s/ingress.yaml`, `OAUTH_REDIRECT_URI` del Deployment y el Redirect URI de la aplicación en GitLab | Los tres tienen que coincidir |
+| Branch environments (`<environment>-<app>.dev.example.com`) | `DEV_DOMAIN` in the template | Change the variable. New environments come out with the new domain; existing ones keep theirs until their next push or until they expire (7 days) |
+| Production (`<app>.<domain>`) | `PROD_DOMAIN` in the template (or in a project's `.gitlab-ci.yml`, for its own name) | Change the variable. It applies on the next `deploy_prod` |
+| KubeDev | `host` in `kdev/k8s/ingress.yaml`, `OAUTH_REDIRECT_URI` in the Deployment and the application's Redirect URI in GitLab | All three must match |
 
-La aplicación solo se ve afectada si **escribe direcciones absolutas**. El manual ya lo prohíbe: se usan rutas
-relativas (`/api/...`), que valen con cualquier dominio. Si un backend restringe los orígenes permitidos (CORS)
-con un dominio concreto, hay que ajustarlo.
+The application is only affected if it **writes absolute addresses**. The manual already forbids that: relative
+paths (`/api/...`) are used, which work with any domain. If a backend restricts allowed origins (CORS)
+to a specific domain, it has to be adjusted.
 
 
-**Cuando el A10 sirva HTTPS** (no antes), en este orden:
+**When the A10 serves HTTPS** (not before), in this order:
 
-**a) KubeDev.** El `Ingress` del repositorio ya existe, con un marcador en el host. Revísalo y aplícalo, y ajusta
-las variables de inicio de sesión a la dirección definitiva:
+**a) KubeDev.** The repository's `Ingress` already exists, with a placeholder in the host. Review and apply it, and adjust
+the login variables to the final address:
 
 ```bash
-# kdev/k8s/ingress.yaml: comprueba que `host:` es kdev.example.com (o el nombre real)
+# kdev/k8s/ingress.yaml: check that `host:` is kdev.example.com (or the real name)
 kubectl apply -f kdev/k8s/ingress.yaml
 kubectl -n kdev set env deploy/kdev \
   OAUTH_REDIRECT_URI=https://kdev.example.com/api/auth/callback COOKIE_SECURE=true
 kubectl -n kdev rollout status deploy/kdev
 ```
 
-Y en GitLab, *Admin Area, Applications*, la aplicación **kdev**: cambia (o añade) el **Redirect URI** a
-`https://kdev.example.com/api/auth/callback`. Tiene que coincidir **exactamente** con
-`OAUTH_REDIRECT_URI`, o el inicio de sesión falla con «redirect_uri_mismatch».
+And in GitLab, *Admin Area, Applications*, the **kdev** application: change (or add) the **Redirect URI** to
+`https://kdev.example.com/api/auth/callback`. It must match `OAUTH_REDIRECT_URI` **exactly**,
+or login fails with "redirect_uri_mismatch".
 
-> Mientras accedas por el NodePort de pruebas (HTTP), `COOKIE_SECURE` debe seguir en `false`: el navegador no
-> envía una cookie segura por HTTP. Cámbialo a `true` solo cuando entres por HTTPS.
+> While you access through the test NodePort (HTTP), `COOKIE_SECURE` must stay `false`: the browser does not
+> send a secure cookie over HTTP. Change it to `true` only when you come in over HTTPS.
 
-**b) Plantilla.** Con HTTPS en el A10 y el comodín de producción publicado:
+**b) Template.** With HTTPS on the A10 and the production wildcard published:
 
 ```yaml
-# en desarrollo-k8s/plantillas, k8s-review.yml
+# in desarrollo-k8s/plantillas, k8s-review.yml
 variables:
-  ENV_SCHEME: "https"                    # el enlace «Open» de GitLab
-  PROD_DOMAIN: apps.example.com    # solo si se pidió el comodín *.apps (opción B)
+  ENV_SCHEME: "https"                    # GitLab's "Open" link
+  PROD_DOMAIN: apps.example.com    # only if the *.apps wildcard was requested (option B)
 ```
 
-Con el cambio de `PROD_DOMAIN`, la aplicación de ejemplo pasa de `hola-k8s.example.com` a
-`hola-k8s.apps.example.com` en su **siguiente** despliegue de producción. Haz el cambio cuando el comodín
-ya resuelva, no antes, o `deploy_prod` publicaría un nombre que aún no abre.
+With the `PROD_DOMAIN` change, the example application goes from `hola-k8s.example.com` to
+`hola-k8s.apps.example.com` on its **next** production deployment. Make the change when the wildcard
+already resolves, not before, or `deploy_prod` would publish a name that does not open yet.
 
-**c) Enlaces de KubeDev.** Los enlaces a los entornos usan el esquema de la variable `ENV_SCHEME` del Deployment
-de KubeDev (desde kdev 0.4.7). Con `https`, salen por HTTPS aunque entres a KubeDev por el NodePort de pruebas.
-Si la variable no existe, usan el mismo esquema que la página con la que has entrado.
+**c) KubeDev links.** The links to the environments use the scheme from the `ENV_SCHEME` variable of the KubeDev
+Deployment (since kdev 0.4.7). With `https`, they come out as HTTPS even if you enter KubeDev through the test NodePort.
+If the variable does not exist, they use the same scheme as the page you came in through.
 
 ```bash
 kubectl -n kdev set env deploy/kdev ENV_SCHEME=https
 ```
 
-**d) El manual.** Si cambias `PROD_DOMAIN`, las direcciones de producción del manual y de la presentación llevan `.apps`. Cuando todo abra, quitar los avisos de «mientras no esté el DNS» (`index.md`,
-`primer-entorno.md`, `diagnostico.md`) y rellenar `[dirección de KubeDev]` en la presentación.
+**d) The manual.** If you change `PROD_DOMAIN`, the production addresses in the manual and in the presentation carry `.apps`. Once everything opens, remove the "while DNS is not there" notices (`index.md`,
+`primer-entorno.md`, `diagnostico.md`) and fill in `[KubeDev address]` in the presentation.
 
-## 3. Cómo comprobarlo, escalón a escalón
+## 3. How to check it, step by step
 
-`comprobar.sh` dice **en qué escalón falla** cada nombre, en lugar de un «no abre» a secas. Desde la raíz del
-paquete, en cualquier equipo que use el mismo DNS que los desarrolladores:
+`comprobar.sh` tells you **at which step** each name fails, instead of a bare "it doesn't open". From the
+package root, on any machine that uses the same DNS as the developers:
 
 ```bash
-export VIP=[IP del VIP]                 # opcional: avisa si un nombre resuelve a otra IP
-export TRAEFIK=[IP de un nodo]          # opcional: añade la prueba «directo», que separa red de aplicación
-export CA=[fichero PEM de la CA interna]   # opcional: para validar el certificado HTTPS
-bash plataforma/dns/comprobar.sh
-bash plataforma/dns/comprobar.sh hola-k8s.example.com     # añade los nombres que quieras
+export VIP=[VIP IP]                 # optional: warns if a name resolves to another IP
+export TRAEFIK=[IP of a node]          # optional: adds the "direct" test, which separates network from application
+export CA=[PEM file of the internal CA]   # optional: to validate the HTTPS certificate
+bash dns/comprobar.sh
+bash dns/comprobar.sh hola-k8s.example.com     # add any names you want
 ```
 
-Por defecto prueba `kdev.example.com` y **un nombre inventado de los entornos**
-(`comprobacion-NNNN.dev.example.com`). Ese nombre no existe como entorno a propósito:
+By default it tests `kdev.example.com` and **a made-up environment name**
+(`comprobacion-NNNN.dev.example.com`). That name deliberately does not exist as an environment:
 
-| Resultado | Qué significa |
+| Result | What it means |
 |---|---|
-| **404** en el nombre inventado | **Todo bien hasta el clúster**: el DNS comodín, el A10 y Traefik funcionan. El 404 es el de Traefik, que no tiene ningún entorno con ese nombre |
-| `FALLA en el DNS` | El nombre no resuelve: falta el registro |
-| `resuelve a X, no a la IP del balanceador` | El registro apunta a otra IP |
-| `FALLA en el balanceador` | Resuelve, pero nada responde: falta el servicio virtual del A10 en esa IP y puerto, o el cortafuegos |
-| `FALLA el certificado` | El certificado no cubre el nombre, o el equipo no reconoce la CA |
-| 502 | Llega al clúster, pero la aplicación no está lista |
-| 200 o 302 en un nombre real | Abre |
+| **404** on the made-up name | **All good up to the cluster**: wildcard DNS, the A10 and Traefik work. The 404 is Traefik's, which has no environment with that name |
+| `FALLA en el DNS` (fails in DNS) | The name does not resolve: the record is missing |
+| `resuelve a X, no a la IP del balanceador` (resolves to X, not to the load balancer's IP) | The record points to another IP |
+| `FALLA en el balanceador` (fails at the load balancer) | It resolves, but nothing responds: the A10 virtual service is missing at that IP and port, or the firewall |
+| `FALLA el certificado` (certificate fails) | The certificate does not cover the name, or the machine does not recognise the CA |
+| 502 | It reaches the cluster, but the application is not ready |
+| 200 or 302 on a real name | It opens |
 
-El orden lógico de la validación: primero el DNS (que resuelvan los tres tipos de nombre), después el A10
-(el nombre inventado debe dar 404), después el certificado, y al final el navegador: abrir
-`https://kdev.example.com`, iniciar sesión y pulsar el enlace de un entorno.
+The logical order of validation: first DNS (the three kinds of name must resolve), then the A10
+(the made-up name must give 404), then the certificate, and finally the browser: open
+`https://kdev.example.com`, log in and click an environment's link.
 
-### Un 404 solo en las rutas `/api`
+### A 404 only on `/api` routes
 
-Si la raíz de una aplicación abre pero `/api/...` da **404 de Traefik** (texto plano, `404 page not found`) a
-pesar de que su Ingress es correcto, mira si hay una ruta de Traefik **sin `Host`** que se quede con esos caminos:
+If an application's root opens but `/api/...` gives a **Traefik 404** (plain text, `404 page not found`) even
+though its Ingress is correct, check whether there is a Traefik route **without `Host`** that captures those paths:
 
 ```bash
 kubectl get ingressroute -A -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name}{"\n"}{range .spec.routes[*]}   {.match}{"\n"}{end}{end}'
 ```
 
-Traefik da a cada ruta una prioridad igual a la **longitud de su regla** y gana la mayor. Una regla como
-``PathPrefix(`/api`) || PathPrefix(`/dashboard`)`` (46 caracteres, la del panel) le gana a una aplicación cuya ruta
-sea ``Host(`kdev.example.com`) && PathPrefix(`/`)`` (44), y además deja el panel interno de Traefik accesible
-bajo cualquier nombre. El arreglo de fondo es atar esa ruta a su nombre con `Host(...)`. El rápido, para una
-aplicación concreta:
+Traefik gives each route a priority equal to the **length of its rule** and the highest wins. A rule such as
+``PathPrefix(`/api`) || PathPrefix(`/dashboard`)`` (46 characters, the dashboard's) beats an application whose route
+is ``Host(`kdev.example.com`) && PathPrefix(`/`)`` (44), and it also leaves Traefik's internal dashboard reachable
+under any name. The root fix is to tie that route to its name with `Host(...)`. The quick one, for a specific
+application:
 
 ```bash
-kubectl -n <namespace> annotate ingress <nombre> traefik.ingress.kubernetes.io/router.priority="1000" --overwrite
+kubectl -n <namespace> annotate ingress <name> traefik.ingress.kubernetes.io/router.priority="1000" --overwrite
 ```
 
-## 4. Producción: la segunda petición
+## 4. Production: the second request
 
-Lo de las ramas (`*.dev.example.com`) y KubeDev (`kdev.example.com`) ya está. Falta el nombre de **producción**.
+Branches (`*.dev.example.com`) and KubeDev (`kdev.example.com`) are done. The **production** name is missing.
 
-### Qué certificado hace falta, según la opción
+### Which certificate is needed, depending on the option
 
-| | Opción A: `<app>.example.com` | Opción B: `<app>.apps.example.com` |
+| | Option A: `<app>.example.com` | Option B: `<app>.apps.example.com` |
 |---|---|---|
-| DNS | **Un registro por aplicación nueva** | **Un solo comodín**, `*.apps.example.com` |
-| Certificado | Lo cubre el comodín `*.example.com` que ya usan las demás aplicaciones | Hay que **añadir** `*.apps.example.com`: un comodín solo cubre un nivel |
-| Riesgo | Chocar con el nombre de una aplicación de la casa (`APP_NAME` solo es único dentro de `desarrollo-k8s`) | Ninguno de ese tipo |
-| Trámite por aplicación nueva | Sí | No |
+| DNS | **One record per new application** | **A single wildcard**, `*.apps.example.com` |
+| Certificate | Covered by the `*.example.com` wildcard that the other applications already use | `*.apps.example.com` has to be **added**: a wildcard only covers one level |
+| Risk | Clashing with the name of an in-house application (`APP_NAME` is only unique within `desarrollo-k8s`) | None of that kind |
+| Request per new application | Yes | No |
 
-La recomendación sigue siendo la **B**: el único coste es un certificado, una vez.
+The recommendation is still **B**: the only cost is one certificate, once.
 
-### Texto para el ticket (opción B)
+### Text for the ticket (option B)
 
-> **Asunto:** Comodín DNS y certificado para las aplicaciones en producción de la plataforma Kubernetes
+> **Subject:** DNS wildcard and certificate for production applications on the Kubernetes platform
 >
-> Para publicar las aplicaciones de desarrollo en producción necesitamos:
+> To publish the development applications to production we need:
 >
-> 1. **DNS:** un registro `*.apps.example.com` (A, o alias hacia el nombre del balanceador, como los demás) apuntando al **mismo VIP del A10**
->    que ya usan `*.dev.example.com` y `kdev.example.com`.
-> 2. **A10:** añadir `*.apps.example.com` al servicio virtual existente, con un **certificado que cubra `*.apps.example.com`**
->    (el comodín `*.example.com` actual no lo cubre: es de un solo nivel). Mismos servidores reales (los nodos, puerto 80),
->    la misma comprobación de salud y conservar la cabecera `Host`.
+> 1. **DNS:** a `*.apps.example.com` record (A, or an alias to the load balancer's name, like the others) pointing to the **same A10 VIP**
+>    already used by `*.dev.example.com` and `kdev.example.com`.
+> 2. **A10:** add `*.apps.example.com` to the existing virtual service, with a **certificate covering `*.apps.example.com`**
+>    (the current `*.example.com` wildcard does not cover it: it is single-level). Same real servers (the nodes, port 80),
+>    the same health check, and keep the `Host` header.
 >
-> Con esto, cada aplicación nueva tendrá su dirección (`<app>.apps.example.com`) sin pedir nada más. Avisadnos al terminar para validarlo.
+> With this, each new application will get its address (`<app>.apps.example.com`) without requesting anything else. Let us know when finished so we can validate it.
 
-### El cambio, paso a paso
+### The change, step by step
 
-1. **Redes** aplica la petición.
-2. **Valida el nombre** antes de tocar nada de nuestro lado: `bash plataforma/dns/comprobar.sh` (prueba un nombre inventado bajo
-   `apps.`: debe dar **404 de Traefik**). Si da `FALLA`, no sigas.
-3. **Cambia la plantilla** (`desarrollo-k8s/plantillas`, `k8s-review.yml`): `PROD_DOMAIN: apps.example.com`.
-4. **Pipeline nuevo en `main`** de `hola-k8s` (commit nuevo o *Run pipeline*; *Retry* no sirve) y pulsar `deploy_prod`.
-   Helm cambia el host del Ingress en el mismo entorno, sin recrearlo.
-5. **Comprueba** `https://hola-k8s.apps.example.com`. **El nombre antiguo (`hola-k8s.example.com`) deja de funcionar de inmediato.**
-   Avisa a quien lo use antes de hacerlo.
-6. **Actualiza las direcciones escritas** (ver abajo).
+1. **The network team** applies the request.
+2. **Validate the name** before touching anything on our side: `bash dns/comprobar.sh` (it tests a made-up name under
+   `apps.`: it must give a **Traefik 404**). If it gives `FALLA`, do not go on.
+3. **Change the template** (`desarrollo-k8s/plantillas`, `k8s-review.yml`): `PROD_DOMAIN: apps.example.com`.
+4. **New pipeline on `main`** of `hola-k8s` (a new commit or *Run pipeline*; *Retry* does not work) and press `deploy_prod`.
+   Helm changes the Ingress host in the same environment, without recreating it.
+5. **Check** `https://hola-k8s.apps.example.com`. **The old name (`hola-k8s.example.com`) stops working immediately.**
+   Warn whoever uses it before doing this.
+6. **Update the written addresses** (see below).
 
-### Dónde hay direcciones de producción escritas
+### Where production addresses are written
 
-Hay que cambiar `<app>.example.com` por `<app>.apps.example.com` en: el manual de KubeDev (`entornos.md`, `produccion.md`,
-`referencia.md`), la wiki (`referencia.md` y `flujo-cicd.md`), la presentación y el README. Se hace **después** del paso 5,
-no antes: hasta entonces la dirección real sigue siendo la antigua.
+`<app>.example.com` has to be changed to `<app>.apps.example.com` in: the KubeDev manual (`entornos.md`, `produccion.md`,
+`referencia.md`), the wiki (`referencia.md` and `flujo-cicd.md`), the presentation and the README. Do it **after** step 5,
+not before: until then the real address is still the old one.
 
-## Qué se probó y qué no
+## What was tested and what was not
 
-Probado: `comprobar.sh` contra servidores de prueba en siete situaciones (llega a Traefik, la aplicación abre,
-502, el nombre no resuelve, nada responde, IP distinta a la del VIP y certificado no válido y válido con la
-CA), y que la plantilla y la interfaz de KubeDev compilan con el cambio de esquema.
+Tested: `comprobar.sh` against test servers in seven situations (reaches Traefik, the application opens,
+502, the name does not resolve, nothing responds, an IP different from the VIP's, and an invalid certificate and one valid with the
+CA), and that the template and the KubeDev interface compile with the scheme change.
 
-**No probado con tu A10 ni con tu DNS real.** En particular: cómo se expresa en tu A10 cada punto de la
-solicitud (cada fabricante lo llama distinto), si ya existe un servicio virtual reutilizable para otras
-aplicaciones del clúster, y el comportamiento de las cabeceras `X-Forwarded-*` con Traefik.
+**Not tested with your A10 or your real DNS.** In particular: how each point of the
+request is expressed on your A10 (each vendor calls it something different), whether a reusable virtual service already exists for other
+cluster applications, and the behaviour of the `X-Forwarded-*` headers with Traefik.
 
-## Dos avisos
+## Two warnings
 
-- **GitLab sigue por HTTP.** El inicio de sesión de KubeDev redirige a GitLab y vuelve a KubeDev por HTTPS: funciona,
-  pero las credenciales de GitLab viajan sin cifrar por la intranet. Es un asunto aparte (y GitLab 16.3 está fuera
-  de soporte), pero conviene apuntarlo.
-- **Un nombre de entorno largo.** Cada parte de un nombre DNS admite 63 caracteres. Por eso el manual limita
-  `APP_NAME` a 34: para que `<entorno>-<app>`, que es un solo bloque bajo el comodín, quepa.
+- **GitLab is still on HTTP.** KubeDev's login redirects to GitLab and comes back to KubeDev over HTTPS: it works,
+  but the GitLab credentials travel unencrypted over the intranet. That is a separate matter (and GitLab 16.3 is out
+  of support), but it is worth noting.
+- **A long environment name.** Each part of a DNS name allows 63 characters. That is why the manual limits
+  `APP_NAME` to 34: so that `<environment>-<app>`, which is a single block under the wildcard, fits.

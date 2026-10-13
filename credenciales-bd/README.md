@@ -92,8 +92,8 @@ From the package root, on a machine that can reach GitLab:
 ```bash
 export GITLAB_URL=http://gitlab.example.com         # your GitLab address
 export GITLAB_TOKEN=...                                     # group token (api); optional: if not set, it is asked for without echoing it
-bash plataforma/credenciales-bd/variables-bd.sh crear desarrollo-k8s/mi-app
-bash plataforma/credenciales-bd/variables-bd.sh listar desarrollo-k8s/mi-app
+bash credenciales-bd/variables-bd.sh crear desarrollo-k8s/mi-app
+bash credenciales-bd/variables-bd.sh listar desarrollo-k8s/mi-app
 ```
 
 - **The token.** Best is a **group token** for `desarrollo-k8s`: it only reaches the group's projects and does not

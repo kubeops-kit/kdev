@@ -30,8 +30,8 @@ stored in the repository.
 
 ## Language
 
-The folder READMEs are in English. The scripts (their comments, subcommands and output messages) and
-a few documents (`dns/SOLICITUD-REDES.md`, `propuesta-proteccion/PROTEGER-*.md`) are still in Spanish.
+All documentation is in English. The scripts (their comments, subcommands and output messages) are
+still in Spanish; the READMEs include short glossaries where it matters.
 
 ## License
 

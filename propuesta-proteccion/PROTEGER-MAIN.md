@@ -1,45 +1,45 @@
-# Proteger `main` con Developers pudiendo hacer merge
+# Protecting `main` while letting Developers merge
 
-Decisión: **Developers y Maintainers pueden hacer merge a `main`; nadie hace push directo.**
+Decision: **Developers and Maintainers can merge to `main`; nobody pushes directly.**
 
-## Qué implica (léelo una vez)
+## What this implies (read it once)
 
-En GitLab gratuito no se puede separar «puede mergear» de «puede pulsar `deploy_prod`»: quien puede mergear a
-`main` puede lanzar un trabajo manual en `main`. Con esta decisión:
+On free GitLab you cannot separate "can merge" from "can press `deploy_prod`": whoever can merge to
+`main` can launch a manual job on `main`. With this decision:
 
-| Riesgo | Con Developers mergeando | Qué lo limita |
+| Risk | With Developers merging | What limits it |
 |---|---|---|
-| Un Developer despliega a producción | **Sí puede**, en cuanto su MR llegue a `main` y pulse `deploy_prod` | GitLab guarda quién lo pulsó. Opción **etiquetas** (abajo) lo evita sin pagar Premium |
-| Un Developer cambia el `.gitlab-ci.yml` de su proyecto, hace merge y ejecuta lo que quiera en el runner protegido, con las variables de producción | **Sí puede**, sin que nadie revise (sin aprobaciones obligatorias en la edición gratuita) | El runner de producción solo escribe en `app-*-prod` (las políticas del kit A), pero tiene las credenciales de BD de producción de ese proyecto |
-| Un Developer cambia la plantilla | **No**, si las plantillas están en un grupo donde son Reporter | Ver «Plantillas» |
+| A Developer deploys to production | **They can**, as soon as their MR reaches `main` and they press `deploy_prod` | GitLab records who pressed it. The **tags** option (below) avoids it without paying for Premium |
+| A Developer changes their project's `.gitlab-ci.yml`, merges, and runs whatever they want on the protected runner, with the production variables | **They can**, with nobody reviewing it (no mandatory approvals in the free edition) | The production runner only writes to `app-*-prod` (the policies of kit A), but it holds that project's production DB credentials |
+| A Developer changes the template | **No**, if the templates are in a group where they are Reporter | See "Templates" |
 
-## 1. Aplicar la protección (script por API)
+## 1. Applying the protection (API script)
 
-Necesita un token personal con ámbito `api` de un administrador. **Por defecto solo informa.**
+It needs a personal token with the `api` scope from an administrator. **By default it only reports.**
 
 ```bash
-export GITLAB_URL=http://TU_GITLAB GITLAB_TOKEN=glpat-...
-python3 -I proteger-gitlab.py --grupo ID_GRUPO --plantillas ID_PROYECTO_PLANTILLAS      # revisión: no cambia nada
-python3 -I proteger-gitlab.py --grupo ID_GRUPO --plantillas ID_PROYECTO_PLANTILLAS --aplicar
+export GITLAB_URL=http://YOUR_GITLAB GITLAB_TOKEN=glpat-...
+python3 -I proteger-gitlab.py --grupo GROUP_ID --plantillas TEMPLATES_PROJECT_ID      # review: changes nothing
+python3 -I proteger-gitlab.py --grupo GROUP_ID --plantillas TEMPLATES_PROJECT_ID --aplicar
 ```
 
-Qué hace en cada proyecto del grupo (y subgrupos):
-- La rama por defecto queda protegida: push **nadie**, merge **Developers y Maintainers**, sin force push.
-  En 16.x no hay una orden de «editar»: si ya estaba protegida de otra forma se borra y se vuelve a crear
-  (unos instantes sin protección).
-- Las variables con ámbito `production` pasan a **protegidas**.
-- Te avisa de variables **protegidas con ámbito `review/*` o `*`**: no llegan a las ramas de desarrollo y sus
-  despliegues de rama fallarían por falta de credenciales. `--desproteger-review` las corrige.
-- En las plantillas: la rama queda con push nadie y merge solo Maintainers, y lista quién tiene rol Developer.
+What it does in each project of the group (and subgroups):
+- The default branch becomes protected: push **no one**, merge **Developers and Maintainers**, no force push.
+  In 16.x there is no "edit" command: if it was already protected in another way, it is deleted and created again
+  (a few moments without protection).
+- Variables with scope `production` become **protected**.
+- It warns you about variables that are **protected with scope `review/*` or `*`**: they do not reach the development
+  branches and their branch deployments would fail for lack of credentials. `--desproteger-review` fixes them.
+- On the templates: the branch is set to push no one and merge Maintainers only, and it lists who has the Developer role.
 
-Los valores de las variables no se leen. Para el valor por defecto de los proyectos **nuevos**, en el grupo:
-*Settings → Repository → Default branch protection*, y elige la opción en cuya descripción los Developers
-**pueden hacer merge pero no push**.
+Variable values are not read. For the default value of **new** projects, in the group:
+*Settings → Repository → Default branch protection*, and choose the option whose description says Developers
+**can merge but not push**.
 
-## 2. Opcional pero recomendado: publicar con etiquetas (separa merge de publicar)
+## 2. Optional but recommended: publish with tags (separates merging from publishing)
 
-Con `--tags`, las etiquetas `v*` solo las crean Maintainers. Si `deploy_prod` se ejecuta sobre una etiqueta y no
-sobre `main`, los Developers hacen merge y **un Maintainer decide publicar** creando `v1.4.0`. Cambio en la plantilla:
+With `--tags`, only Maintainers can create `v*` tags. If `deploy_prod` runs on a tag and not on
+`main`, Developers merge and **a Maintainer decides to publish** by creating `v1.4.0`. Template change:
 
 ```yaml
 deploy_prod:
@@ -53,28 +53,28 @@ deploy_prod:
     name: production
     url: $ENV_SCHEME://$APP_NAME.$PROD_DOMAIN
   before_script:
-    - export IMAGE_TAG="main-$CI_COMMIT_SHORT_SHA"     # solo imágenes construidas en main
-    # ... el resto igual que ahora
+    - export IMAGE_TAG="main-$CI_COMMIT_SHORT_SHA"     # only images built on main
+    # ... the rest the same as now
 ```
 
-- Solo se pueden publicar commits cuya imagen salió de `main` (la etiqueta `main-<commit>`); un commit de una
-  rama no tiene esa imagen y el despliegue falla en lugar de publicar algo sin revisar.
-- El runner protegido y las variables protegidas también se aplican a etiquetas protegidas.
-- Un rollback es lanzar `deploy_prod` de la etiqueta anterior.
-- Cambia el flujo del equipo (hay que crear etiqueta para publicar); por eso es opcional. Dime si lo quieres y
-  actualizo `ci-template.yml` y la guía.
+- Only commits whose image came from `main` (the `main-<commit>` tag) can be published; a commit from a
+  branch does not have that image and the deployment fails instead of publishing something unreviewed.
+- The protected runner and protected variables also apply to protected tags.
+- A rollback is launching `deploy_prod` of the previous tag.
+- It changes the team's workflow (a tag must be created to publish), which is why it is optional. If you want it,
+  update `ci-template.yml` and this guide accordingly.
 
-## 3. Plantillas: dónde viven
+## 3. Templates: where they live
 
-Un proyecto puede hacer `include: project: … file: … ref: mi-rama`. Si los Developers tienen permiso de
-escritura sobre el proyecto de plantillas, uno de ellos puede crear una rama con una plantilla modificada y
-usarla desde su proyecto. Las plantillas deben estar en un grupo donde los desarrolladores sean **Reporter**
-(lectura). Un rol heredado del grupo no se puede bajar a nivel de proyecto, así que normalmente hay que
-**mover el proyecto de plantillas a otro grupo** (p. ej. `plataforma/plantillas`) y actualizar el `include` de
-los proyectos. El script lo detecta (`--plantillas`) y lista quién tiene escritura.
+A project can do `include: project: … file: … ref: my-branch`. If Developers have write permission on the
+templates project, one of them can create a branch with a modified template and
+use it from their project. Templates should live in a group where developers are **Reporter**
+(read-only). A role inherited from the group cannot be lowered at project level, so you will normally have to
+**move the templates project to another group** (e.g. `plataforma/plantillas`) and update the `include` of
+the projects. The script detects this (`--plantillas`) and lists who has write access.
 
-## Qué se probó
+## What was tested
 
-El script se probó contra un GitLab simulado con estado (revisión, aplicar, y repetir la revisión: queda
-«Todo está como debe»). **No contra tu GitLab 16.3.** Si algún paso devuelve error de la API, el script lo muestra con el
-código HTTP; pégamelo.
+The script was tested against a stateful simulated GitLab (review, apply, and repeating the review: it ends with
+"Todo está como debe", i.e. everything is as it should be). **Not against your GitLab 16.3.** If a step returns an API error, the script shows it with the
+HTTP code; include it when reporting the problem.
