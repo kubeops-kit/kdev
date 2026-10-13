@@ -1,5 +1,8 @@
 # kdev — CI/CD and ephemeral environments on Kubernetes
 
+[![CI](https://github.com/kubeops-kit/kdev/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kubeops-kit/kdev/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 A set of manifests, charts, GitLab pipeline templates and scripts to set up
 development environments (one branch = one environment) and production on Kubernetes, with
 permission separation, network isolation and an image registry (Harbor).
