@@ -112,7 +112,7 @@ can still have it: its record is requested and that project overrides `PROD_DOMA
 With a wildcard, any name under `apps.` reaches Traefik even if the application does not exist (it answers 404). That is
 harmless, but remember that today the branch runner can create an Ingress with **any name**, including
 the production name of another application. This is closed with a cluster rule limiting its names to `*.dev…`, and it fits
-the proposal to separate branch and production permissions (`propuesta-proteccion/`).
+the proposal to separate branch and production permissions (`proteccion/`).
 
 ## 2. What changes on our side
 

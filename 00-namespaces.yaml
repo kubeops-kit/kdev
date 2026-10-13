@@ -32,3 +32,20 @@ kind: ServiceAccount
 metadata:
   name: ci-deploy-job
   namespace: ci-deploy
+---
+# PRODUCTION deployment runner: separate from the branch one and marked as "protected" in GitLab,
+# so that it only runs jobs from protected branches and tags (main).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ci-deploy-prod
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted
+    kubeops/role: ci
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ci-deploy-prod-job
+  namespace: ci-deploy-prod

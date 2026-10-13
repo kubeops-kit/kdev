@@ -3,7 +3,7 @@
 #   - "Protected" TICKED (it only runs jobs from protected branches and tags)
 #   - "Run untagged jobs" unticked
 #
-# helm install runner-deploy-prod ./gitlab-runner-0.71.0.tgz -n ci-deploy-prod -f propuesta-proteccion/32-runner-deploy-prod-values.yaml
+# helm install runner-deploy-prod ./gitlab-runner-0.71.0.tgz -n ci-deploy-prod -f 32-runner-deploy-prod-values.yaml
 #   kubectl -n ci-deploy-prod create secret generic runner-token \
 #     --from-literal=runner-token='glrt-ZZZZ' --from-literal=runner-registration-token=''
 image:

@@ -62,3 +62,37 @@ rules:
   - apiGroups: [batch]
     resources: [jobs, cronjobs]
     verbs: [get, list, watch, create, update, patch, delete]
+---
+# Permissions of the PRODUCTION SA: the minimum to create and update. It cannot delete namespaces
+# (deleting a production environment is done by hand, with an administrator).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ci-deploy-prod-bootstrap
+rules:
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [create, get, list]
+  - apiGroups: [""]
+    resources: [resourcequotas, limitranges]
+    verbs: [create]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [rolebindings]
+    verbs: [create]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [clusterroles]
+    verbs: [bind]
+    resourceNames: [ci-deploy-app, kdev-reader]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ci-deploy-prod-bootstrap
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ci-deploy-prod-bootstrap
+subjects:
+  - kind: ServiceAccount
+    name: ci-deploy-prod-job
+    namespace: ci-deploy-prod

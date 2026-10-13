@@ -6,7 +6,7 @@ REVIEW_SA = "system:serviceaccount:ci-deploy:ci-deploy-job"
 PROD_SA = "system:serviceaccount:ci-deploy-prod:ci-deploy-prod-job"
 PSA = "pod-security.kubernetes.io/enforce"
 
-docs = list(yaml.safe_load_all(open(__import__('os').path.join(__import__('os').path.dirname(__import__('os').path.abspath(__file__)), '20-admission-policy.yaml'), encoding='utf-8')))
+docs = list(yaml.safe_load_all(open(__import__('os').path.join(__import__('os').path.dirname(__import__('os').path.abspath(__file__)), '..', '20-admission-policy.yaml'), encoding='utf-8')))
 policies = {d['metadata']['name']: d['spec'] for d in docs if d['kind'] == 'ValidatingAdmissionPolicy'}
 env = celpy.Environment()
 

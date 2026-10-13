@@ -116,7 +116,7 @@ build_back:
             default: {cpu: 250m, memory: 256Mi}
             defaultRequest: {cpu: 50m, memory: 64Mi}
       EOF
-    - kubectl -n "$NS" create rolebinding ci-deploy --clusterrole=ci-deploy-app --serviceaccount=ci-deploy:ci-deploy-job || true
+    - kubectl -n "$NS" create rolebinding "$RB_NAME" --clusterrole=ci-deploy-app --serviceaccount="$DEPLOY_SA" || true
     - kubectl -n "$NS" create rolebinding kdev-reader --clusterrole=kdev-reader --serviceaccount=kdev:kdev || true
     - |
       # Database credentials: sysadmins define them in each GitLab project, with scope
@@ -154,6 +154,8 @@ deploy_review:
     auto_stop_in: 7 days
   before_script:
     - export ENV_KIND=review
+    - export RB_NAME=ci-deploy
+    - export DEPLOY_SA=ci-deploy:ci-deploy-job
     - export HELM_EXTRA=""
     - |
       VALUES_EXTRA=""
@@ -182,6 +184,8 @@ stop_review:
 deploy_prod:
   extends: .deploy
   stage: deploy
+  # PROTECTED runner: only serves protected branches and tags (main). It is the only one with permissions on production.
+  tags: [k8s-deploy-prod]
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: manual          # remove 'when' for automatic deployment on merge
@@ -190,6 +194,8 @@ deploy_prod:
     url: $ENV_SCHEME://$APP_NAME.$PROD_DOMAIN
   before_script:
     - export ENV_KIND=prod
+    - export RB_NAME=ci-deploy-prod
+    - export DEPLOY_SA=ci-deploy-prod:ci-deploy-prod-job
     - export HELM_EXTRA="--set replicaCount=2"
     - |
       VALUES_EXTRA=""

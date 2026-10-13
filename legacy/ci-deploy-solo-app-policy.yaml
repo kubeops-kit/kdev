@@ -1,0 +1,41 @@
+# LEGACY: superseded by ../20-admission-policy.yaml (separate policies for the branch and production runners).
+# Kept for reference and for clusters that still have it installed; see ../proteccion/README.md.
+# Security barrier: the ci-deploy-job SA can only WRITE in app-* namespaces
+# and can only create namespaces with Pod Security baseline or restricted.
+# Scope: it only affects requests from that ServiceAccount (matchCondition),
+# so it cannot break anything in the rest of the cluster.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: ci-deploy-solo-app
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["*"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["*"]
+  matchConditions:
+    - name: solo-ci-deploy
+      expression: "request.userInfo.username == 'system:serviceaccount:ci-deploy:ci-deploy-job'"
+  validations:
+    - expression: >-
+        request.resource.resource == 'namespaces'
+        ? request.name.startsWith('app-')
+        : request.namespace.startsWith('app-')
+      message: "ci-deploy solo puede escribir en namespaces con prefijo app-"
+    - expression: >-
+        request.resource.resource != 'namespaces' || request.operation == 'DELETE' ||
+        (has(object.metadata.labels) &&
+         'pod-security.kubernetes.io/enforce' in object.metadata.labels &&
+         object.metadata.labels['pod-security.kubernetes.io/enforce'] in ['baseline', 'restricted'])
+      message: "Los namespaces deben llevar pod-security.kubernetes.io/enforce=baseline|restricted"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: ci-deploy-solo-app
+spec:
+  policyName: ci-deploy-solo-app
+  validationActions: [Deny]

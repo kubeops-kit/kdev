@@ -8,12 +8,13 @@ permission separation, network isolation and an image registry (Harbor).
 
 | Path | What it is |
 |---|---|
-| `00-namespaces.yaml`, `10-rbac.yaml`, `20-admission-policy.yaml` | Namespaces, RBAC and admission policies (CEL) |
-| `30-/31-runner-*-values.yaml` | Values for the GitLab runners (build and deploy) |
+| `00-namespaces.yaml`, `10-rbac.yaml`, `20-admission-policy.yaml` | Namespaces, RBAC and admission policies (CEL) for the branch and production runners |
+| `30-`/`31-`/`32-runner-*-values.yaml` | Values for the GitLab runners (build, branch deploy, production deploy) |
 | `ci-template.yml`, `pipeline-*.yml` | Pipeline template and test pipelines (Kaniko) |
 | `chart/kubeops-app/` | Generic Helm chart to deploy a front + back app |
 | `hola-k8s/` | Example application |
-| `propuesta-proteccion/` | Branch/production separation: protected runner, policies, scripts (see its `README.md`) |
+| `proteccion/` | Branch/production separation: `proteccion.sh`, GitLab scripts and guides (see its `README.md`) |
+| `legacy/` | Superseded `ci-deploy-solo-app` admission policy, kept for reference |
 | `aislamiento-red/` | NetworkPolicies isolating branch pods |
 | `credenciales-bd/` | Per-environment DB credentials via GitLab variables |
 | `harbor/` | Image retention policy in Harbor |

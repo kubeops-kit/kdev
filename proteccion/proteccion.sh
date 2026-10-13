@@ -19,11 +19,12 @@
 set -u
 
 AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MANIF="${MANIFESTS_DIR:-$AQUI/..}"   # directory with the YAML manifests (repository root)
 KUBECTL="${KUBECTL:-kubectl}"
 HELM="${HELM:-helm}"
 ESTADO="${PROTECCION_ESTADO:-$AQUI/estado}"
 if [ -z "${CHART_DIR:-}" ]; then
-  if [ -d "$AQUI/chart/kubeops-app" ]; then CHART_DIR="$AQUI/chart/kubeops-app"; else CHART_DIR="$AQUI/../chart/kubeops-app"; fi
+  CHART_DIR="$MANIF/chart/kubeops-app"
 fi
 
 SA_R="system:serviceaccount:ci-deploy:ci-deploy-job"
@@ -119,16 +120,16 @@ cmd_aplicar() {
   fi
   local f
   for f in 00-namespaces.yaml 10-rbac.yaml 20-admission-policy.yaml; do
-    [ -f "$AQUI/$f" ] || die "falta $f"
+    [ -f "$MANIF/$f" ] || die "falta $f"
   done
   echo "== Namespaces y ServiceAccounts (no cambian el comportamiento de nada existente) =="
-  k apply --dry-run=client -f "$AQUI/00-namespaces.yaml" >/dev/null || die "00-namespaces.yaml no es válido"
-  k apply -f "$AQUI/00-namespaces.yaml" || die "falló al aplicar 00-namespaces.yaml"
+  k apply --dry-run=client -f "$MANIF/00-namespaces.yaml" >/dev/null || die "00-namespaces.yaml no es válido"
+  k apply -f "$MANIF/00-namespaces.yaml" || die "falló al aplicar 00-namespaces.yaml"
   echo "== Validación en el servidor de RBAC y políticas (no cambia nada) =="
-  k apply --dry-run=server -f "$AQUI/10-rbac.yaml" -f "$AQUI/20-admission-policy.yaml" >/dev/null || die "el servidor rechaza 10-rbac.yaml o 20-admission-policy.yaml"
+  k apply --dry-run=server -f "$MANIF/10-rbac.yaml" -f "$MANIF/20-admission-policy.yaml" >/dev/null || die "el servidor rechaza 10-rbac.yaml o 20-admission-policy.yaml"
   ok "RBAC y políticas son válidos para tu clúster"
   echo "== Aplicando RBAC y políticas =="
-  k apply -f "$AQUI/10-rbac.yaml" -f "$AQUI/20-admission-policy.yaml" || die "falló kubectl apply"
+  k apply -f "$MANIF/10-rbac.yaml" -f "$MANIF/20-admission-policy.yaml" || die "falló kubectl apply"
 
   echo "== Comprobando =="
   sleep 4
@@ -552,7 +553,7 @@ cmd_runner_prod() {
   command -v "$HELM" >/dev/null 2>&1 || die "falta helm"
   k get ns ci-deploy-prod >/dev/null 2>&1 || die "no existe el namespace ci-deploy-prod (ejecuta ./proteccion.sh aplicar)"
   local tmp; tmp="$(mktemp)"; trap 'rm -f "$tmp"' RETURN
-  sed "s#http://<GITLAB_HOST>/#${url%/}/#" "$AQUI/32-runner-deploy-prod-values.yaml" > "$tmp"
+  sed "s#http://<GITLAB_HOST>/#${url%/}/#" "$MANIF/32-runner-deploy-prod-values.yaml" > "$tmp"
   grep -q '<GITLAB_HOST>' "$tmp" && die "no se sustituyó la URL de GitLab en los values"
   k -n ci-deploy-prod create secret generic runner-token --from-file=runner-token="$tokfile" --from-literal=runner-registration-token= \
     --dry-run=client -o yaml | k apply -f - >/dev/null || die "no pude crear el secreto runner-token"

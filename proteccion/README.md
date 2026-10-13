@@ -26,7 +26,7 @@ run it as `bash proteccion.sh …`.
 | 3 | `bash proteccion.sh crear-runner-gitlab` *(or by hand, guide 1.4)* | Creates the group runner `k8s-deploy-prod`, protected and with no untagged jobs | Token in `estado/runner-prod.token` |
 | 4 | `bash proteccion.sh runner-prod --gitlab-url http://YOUR_GITLAB/` | Installs the runner in `ci-deploy-prod` | Pod running; shows as *online* in GitLab |
 | 5 | `bash proteccion.sh migrar` then `migrar --aplicar` | Labels the existing `app-*` namespaces and creates the production runner's RoleBinding. **Removes nothing** | Nothing pending |
-| 6 | Publish the `ci-template.yml` from this folder | With it, `deploy_prod` uses `k8s-deploy-prod`. **Only after you see the runner online** | A green `deploy_prod` |
+| 6 | Publish the `ci-template.yml` from the repository root | With it, `deploy_prod` uses `k8s-deploy-prod`. **Only after you see the runner online** | A green `deploy_prod` |
 | 7 | `bash proteccion.sh migrar --aplicar --quitar-antiguos` | Removes the branch runner's RoleBinding in production (otherwise it could still **read** its Secrets) | `ELIMINADO` (removed) |
 | 8 | `bash proteccion.sh probar` | 39 tests with `--dry-run=server`, creating nothing | `Batería limpia.` (clean battery) |
 | 9 | Let the team work for a few days. Then: `GITLAB_URL=… GITLAB_TOKEN=… python3 -I ver-avisos-gitlab.py --grupo ID` | Reads the logs of the real deployments since step 2 and looks for policy warnings | `Sin avisos` (no warnings) |
@@ -35,8 +35,8 @@ run it as `bash proteccion.sh …`.
 After step 10, launch a real branch deployment and a real production deployment. To go back at any
 time: `bash proteccion.sh aviso`. Status at any time: `bash proteccion.sh estado`.
 
-The old policy `ci-deploy-solo-app` stays until you want to retire it (step 10 prints the
-command); it does not interfere.
+If your cluster still has the old policy `ci-deploy-solo-app` (kept in `legacy/`), it stays until you want to
+retire it (step 10 prints the command); it does not interfere.
 
 ## What the battery checks
 
@@ -79,10 +79,10 @@ GitLab.
 |---|---|
 | `proteccion.sh` | Everything cluster-side, with checks |
 | `ver-avisos-gitlab.py` | Looks for policy warnings in the logs of real deployments |
-| `00-namespaces.yaml`, `10-rbac.yaml` | Namespace, SA and permissions of the production runner (in addition to what already exists) |
-| `20-admission-policy.yaml` | The two new policies, **in warning mode** |
-| `32-runner-deploy-prod-values.yaml` | Values of the production runner |
-| `ci-template.yml` | The current template with only two changes: `deploy_prod` uses the protected runner and its RoleBinding |
-| `chart/kubeops-app/` | Copy of the chart for the simulated deployment |
+| `../00-namespaces.yaml`, `../10-rbac.yaml` | Namespaces, SAs and permissions of both runners (branch and production) |
+| `../20-admission-policy.yaml` | The two policies (branch and production), applied **in warning mode** |
+| `../32-runner-deploy-prod-values.yaml` | Values of the production runner |
+| `../ci-template.yml` | The pipeline template: `deploy_prod` uses the protected runner and its own RoleBinding |
+| `../chart/kubeops-app/` | The chart, also used for the simulated deployment |
 | `probar-politicas-cel.py` | Evaluates the CEL expressions without a cluster (`pip install cel-python pyyaml`) |
 | `PROTEGER-PRODUCCION.md`, `PROTEGER-MAIN.md` | The GitLab side: `main` branch, protected variables, template, roles |
