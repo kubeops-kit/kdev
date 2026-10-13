@@ -5,7 +5,7 @@
 #   ./proteccion.sh aplicar                   creates SA/RBAC of the production runner and the 2 policies IN WARNING MODE
 #   ./proteccion.sh migrar [--aplicar] [--quitar-antiguos]
 #                                             labels the app-* namespaces and gives the production runner its RoleBinding
-#   ./proteccion.sh probar [--modo aviso|enforce]
+#   ./proteccion.sh probar [--modo warning|enforce]
 #                                             battery with --dry-run=server: creates nothing
 #   ./proteccion.sh enforce [--max-horas N] [--min-jobs N] [--sin-evidencia-gitlab]
 #                                             switches to blocking ONLY if the battery is clean; if anything fails, goes back to warning
@@ -55,10 +55,10 @@ acciones() { k get validatingadmissionpolicybinding "$1" -o jsonpath='{.spec.val
 modo_actual() {
   local a b
   a="$(acciones "$POL_R")"; b="$(acciones "$POL_P")"
-  if [ -z "$a" ] || [ -z "$b" ]; then echo "ausente"; return; fi
-  case " $a " in *" Deny "*) a=enforce ;; *" Warn "*) a=aviso ;; *) a=otro ;; esac
-  case " $b " in *" Deny "*) b=enforce ;; *" Warn "*) b=aviso ;; *) b=otro ;; esac
-  if [ "$a" = "$b" ]; then echo "$a"; else echo "mixto"; fi
+  if [ -z "$a" ] || [ -z "$b" ]; then echo "absent"; return; fi
+  case " $a " in *" Deny "*) a=enforce ;; *" Warn "*) a=warning ;; *) a=other ;; esac
+  case " $b " in *" Deny "*) b=enforce ;; *" Warn "*) b=warning ;; *) b=other ;; esac
+  if [ "$a" = "$b" ]; then echo "$a"; else echo "mixed"; fi
 }
 
 hash_politicas() {
@@ -140,7 +140,7 @@ cmd_aplicar() {
   done
   ok "the CEL expressions have no type warnings"
   m="$(modo_actual)"
-  [ "$m" = "aviso" ] && ok "current mode: WARNING (blocks nothing)" || { mal "unexpected current mode: $m"; return 1; }
+  [ "$m" = "warning" ] && ok "current mode: WARNING (blocks nothing)" || { mal "unexpected current mode: $m"; return 1; }
   k -n ci-deploy-prod get sa ci-deploy-prod-job >/dev/null 2>&1 && ok "production runner SA created" || { mal "the ci-deploy-prod-job SA is missing"; return 1; }
   local h; h="$(hash_politicas)"
   if leer_env "$ESTADO/aplicado.env" && [ "${E_HASH:-}" = "$h" ]; then
@@ -328,8 +328,9 @@ cmd_probar() {
     case "$1" in --modo) modo_pedido="${2:-}"; shift ;; *) die "unknown option: $1" ;; esac
     shift
   done
+  [ "$modo_pedido" = "aviso" ] && modo_pedido="warning"   # the old Spanish value is still accepted
   local modo; modo="$(modo_actual)"
-  case "$modo" in aviso|enforce) ;; *) die "the policies are not applied or are in state '$modo'. Run ./proteccion.sh aplicar" ;; esac
+  case "$modo" in warning|enforce) ;; *) die "the policies are not applied or are in state '$modo'. Run ./proteccion.sh aplicar" ;; esac
   [ "$modo_pedido" != "auto" ] && [ "$modo_pedido" != "$modo" ] && die "you asked for --modo $modo_pedido but the policies are in $modo"
   N_OK=0; N_FALLO=0; N_PEND=0; N_SALT=0; LOGDET=""
   echo "== Test battery (mode $modo; everything with --dry-run=server, nothing is created) =="
@@ -442,7 +443,7 @@ fijar_acciones() { # "Deny","Audit"
 cmd_aviso() {
   fijar_acciones '"Warn","Audit"' || die "could not change the actions"
   sleep 2
-  [ "$(modo_actual)" = "aviso" ] && ok "policies in WARNING mode (they do not block)" || die "the mode did not end up in warning: $(modo_actual)"
+  [ "$(modo_actual)" = "warning" ] && ok "policies in WARNING mode (they do not block)" || die "the mode did not end up in warning: $(modo_actual)"
 }
 
 cmd_enforce() {
@@ -457,12 +458,12 @@ cmd_enforce() {
   done
   echo "== Conditions to switch to blocking =="
   local m; m="$(modo_actual)"
-  [ "$m" = "aviso" ] || die "the policies are in '$m'; you can only switch to enforce from warning"
+  [ "$m" = "warning" ] || die "the policies are in '$m'; you can only switch to enforce from warning"
   ok "the policies are in warning mode"
   leer_env "$ESTADO/bateria.env" || die "no battery has been run. Run ./proteccion.sh probar"
   local ahora edad_h hash_ahora
   ahora="$(date +%s)"; edad_h=$(( (ahora - E_TS) / 3600 ))
-  [ "$E_MODO" = "aviso" ] || die "the last battery was run in mode $E_MODO"
+  [ "$E_MODO" = "warning" ] || [ "$E_MODO" = "aviso" ] || die "the last battery was run in mode $E_MODO"
   [ "$E_FALLOS" = 0 ] && [ "$E_PENDIENTES" = 0 ] && [ "$E_SALTADOS" = 0 ] \
     || die "the last battery is not clean (failures $E_FALLOS, pending $E_PENDIENTES, skipped $E_SALTADOS). Fix it and repeat ./proteccion.sh probar"
   ok "the last battery is clean"
