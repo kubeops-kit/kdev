@@ -7,12 +7,12 @@ build_test:
   tags: [k8s-build]
   image: harbor.example.com/base/alpine:3.20
   script:
-    - echo "hola desde $(hostname)"
+    - echo "hello from $(hostname)"
     - id
     # The build job must NOT have access to the Kubernetes API
-    - 'ls /var/run/secrets/kubernetes.io/serviceaccount 2>/dev/null && { echo "ERROR: hay token de ServiceAccount"; exit 1; } || echo "OK: sin token de ServiceAccount"'
+    - 'ls /var/run/secrets/kubernetes.io/serviceaccount 2>/dev/null && { echo "ERROR: a ServiceAccount token is present"; exit 1; } || echo "OK: no ServiceAccount token"'
     # The cluster has no internet
-    - 'wget -q -T 5 -O /dev/null http://example.com && { echo "ERROR: hay internet"; exit 1; } || echo "OK: sin internet"'
+    - 'wget -q -T 5 -O /dev/null http://example.com && { echo "ERROR: internet is reachable"; exit 1; } || echo "OK: no internet"'
     # Harbor must be reachable (Kaniko will need it)
     - wget -q -T 5 --no-check-certificate -O - https://harbor.example.com/api/v2.0/ping
 

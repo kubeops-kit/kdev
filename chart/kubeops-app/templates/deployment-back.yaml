@@ -20,7 +20,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: back
-          image: "{{ .Values.image.registry }}/{{ .Values.app }}-back:{{ required "image.tag es obligatorio" .Values.image.tag }}"
+          image: "{{ .Values.image.registry }}/{{ .Values.app }}-back:{{ required "image.tag is required" .Values.image.tag }}"
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

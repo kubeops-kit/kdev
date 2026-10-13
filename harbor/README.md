@@ -102,7 +102,7 @@ It launches a simulation (it never deletes), waits, reads the result and cross-c
 cluster uses:
 
 - One table per repository: how many images are kept and how many would be deleted.
-- One line for each image in use. If any shows up as **ALERTA** (alert), **do not activate the policy**: the policy
+- One line for each image in use. If any shows up as **ALERT**, **do not activate the policy**: the policy
   would delete it. Add a rule or a `keep-` tag and repeat until the exit code is **0**.
 
 If you already launched a simulation from the UI, `--ultima` analyses that one instead of launching another.

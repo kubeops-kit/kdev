@@ -11,7 +11,7 @@ matches the Secret's, and the branch password differs from the production one. P
 to the real projects, one by one, with `variables-bd.sh crear`.
 
 Learned during the test: if the file `deploy/values-prod.yaml` is not in the commit being deployed, the
-pipeline finishes green without applying it. The "Valores aplicados" (values applied) line in the `deploy_*` log gives it away.
+pipeline finishes green without applying it. The "Values applied" line in the `deploy_*` log gives it away.
 
 ## How they travel
 
@@ -111,14 +111,13 @@ bash credenciales-bd/variables-bd.sh listar desarrollo-k8s/mi-app
 - `listar` shows the variables and their settings, **never the values**. It must come out exactly like this:
 
 ```text
-DB_PASSWORD  ámbito production   protegida, enmascarada, sin expandir
-DB_USER      ámbito production   protegida, SIN enmascarar, sin expandir
-DB_PASSWORD  ámbito review/*     no protegida, enmascarada, sin expandir
-DB_USER      ámbito review/*     no protegida, SIN enmascarar, sin expandir
+DB_PASSWORD  scope production   protected, masked, not expanded
+DB_USER      scope production   protected, NOT masked, not expanded
+DB_PASSWORD  scope review/*     not protected, masked, not expanded
+DB_USER      scope review/*     not protected, NOT masked, not expanded
 ```
 
-(Output is in Spanish: `ámbito` = scope; `protegida` = protected; `enmascarada` = masked; `SIN enmascarar` = NOT masked; `sin expandir` = not expanded.
-"NOT masked" is the expected result for `DB_USER`.)
+("NOT masked" is the expected result for `DB_USER`.)
 
 ### By hand, in the UI
 
@@ -156,8 +155,8 @@ Before applying it to real projects. The example application does not connect to
 
    The production fingerprint must differ from the branch ones. Do the same with `DB_PASSWORD`.
 7. **The check that fails properly.** On a branch of a project **without** variables defined (or by temporarily
-   deleting the `review/*` ones), `deploy_review` must fail with "ERROR: tu aplicación usa credenciales de
-   base de datos, pero en este entorno faltan…" (your application uses database credentials, but they are missing in this environment) and leave nothing half-deployed.
+   deleting the `review/*` ones), `deploy_review` must fail with "ERROR: your application uses database
+   credentials, but they are missing in this environment…" and leave nothing half-deployed.
 
 ## Changing a password
 
@@ -185,13 +184,13 @@ deployment runs, and pods only read their password at startup. Three steps, in t
    It is a rolling update: with 2 replicas, one is always serving. On a branch no manual restart is needed:
    another push is enough, which recreates the environment.
 
-Then check that the environment goes back to `Listo` (Ready) in KubeDev.
+Then check that the environment goes back to `Ready` in KubeDev.
 
 ## Typical problems
 
 | Symptom | Cause and fix |
 |---|---|
-| `deploy_prod` fails with "faltan: DB_USER DB_PASSWORD" (missing) | The production variables do not arrive. Either they are not defined with scope `production`, or `main` is not a protected branch and protected variables are not delivered. See the requirement above |
+| `deploy_prod` fails with "…they are missing in this environment: DB_USER DB_PASSWORD" | The production variables do not arrive. Either they are not defined with scope `production`, or `main` is not a protected branch and protected variables are not delivered. See the requirement above |
 | `deploy_review` fails with that same message | There are no variables with scope `review/*` in the project, or they are defined with another scope |
 | The script says it cannot mask | The password is shorter than 8 characters or has disallowed symbols. Change it |
 | The password arrives altered | One of the variables has *Expand variable reference* enabled and the password contains a `$`. Recreate it with the script, which disables it |
@@ -208,7 +207,7 @@ configuration endpoint, with Node.
 **Not tested against your GitLab 16.3:**
 
 - The `raw` parameter (disables "Expand variable reference") of the variables API. It should exist since
-  GitLab 15.7. `listar` confirms it: if it says "EXPANDE referencias" (expands references), the version does not support it and it has to be
+  GitLab 15.7. `listar` confirms it: if it says "EXPANDS references", the version does not support it and it has to be
   unticked by hand in the UI.
 - That the `review/*` scope matches the branches' environment names. Step 4 of the test confirms it.
 - That the job fails properly with the variables missing (step 7).

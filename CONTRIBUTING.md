@@ -14,10 +14,10 @@ Kubernetes (see the [README](README.md) for what is where). Issues and pull requ
 
 ## Conventions
 
-- **Language.** Documentation and code comments are in English. The scripts' subcommands, output messages and
-  identifiers (`aplicar`, `probar`, `estado`, ...) are in Spanish; follow what the surrounding script does and
-  do not translate them in passing, since that changes the scripts' interface. If you add a user-facing message
-  or subcommand to a script, match the language of that script.
+- **Language.** Documentation, code comments and the scripts' messages are in English. The scripts' subcommand
+  names, flags, environment variables and internal identifiers (`aplicar`, `probar`, `estado`, `--aplicar`, ...) are
+  in Spanish for historical reasons; do not rename them in passing, since that changes the scripts' interface.
+  New messages go in English. Renaming the interface (ideally keeping the old names as aliases) is welcome as its own change.
 - **Each folder has its own `README.md`** with the steps for that area. Update it when you change behaviour.
   Note what was tested and what was not, as the existing READMEs do.
 - **Shell scripts** use `#!/usr/bin/env bash` (`aislamiento-red/aislar.sh` is POSIX `sh` and must stay that way).

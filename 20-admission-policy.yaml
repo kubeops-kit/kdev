@@ -29,7 +29,7 @@ spec:
            has(namespaceObject.metadata.labels) &&
            'kubeops/env' in namespaceObject.metadata.labels &&
            namespaceObject.metadata.labels['kubeops/env'] == 'review')
-      message: "El runner de ramas solo puede escribir en entornos de rama (app-<app>-review-<entorno>)"
+      message: "The branch runner can only write to branch environments (app-<app>-review-<environment>)"
     - expression: >-
         request.resource.resource != 'namespaces' || request.operation == 'DELETE' ||
         (has(object.metadata.labels) &&
@@ -37,7 +37,7 @@ spec:
          object.metadata.labels['pod-security.kubernetes.io/enforce'] in ['baseline', 'restricted'] &&
          'kubeops/env' in object.metadata.labels &&
          object.metadata.labels['kubeops/env'] == 'review')
-      message: "Los namespaces de rama deben llevar kubeops/env=review y pod-security.kubernetes.io/enforce=baseline|restricted"
+      message: "Branch namespaces must carry kubeops/env=review and pod-security.kubernetes.io/enforce=baseline|restricted"
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
@@ -70,7 +70,7 @@ spec:
            has(namespaceObject.metadata.labels) &&
            'kubeops/env' in namespaceObject.metadata.labels &&
            namespaceObject.metadata.labels['kubeops/env'] == 'prod')
-      message: "El runner de producción solo puede escribir en entornos de producción (app-<app>-prod)"
+      message: "The production runner can only write to production environments (app-<app>-prod)"
     - expression: >-
         request.resource.resource != 'namespaces' || request.operation == 'DELETE' ||
         (has(object.metadata.labels) &&
@@ -78,7 +78,7 @@ spec:
          object.metadata.labels['pod-security.kubernetes.io/enforce'] in ['baseline', 'restricted'] &&
          'kubeops/env' in object.metadata.labels &&
          object.metadata.labels['kubeops/env'] == 'prod')
-      message: "Los namespaces de producción deben llevar kubeops/env=prod y pod-security.kubernetes.io/enforce=baseline|restricted"
+      message: "Production namespaces must carry kubeops/env=prod and pod-security.kubernetes.io/enforce=baseline|restricted"
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding

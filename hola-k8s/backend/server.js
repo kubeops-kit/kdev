@@ -6,7 +6,7 @@ http.createServer((req, res) => {
   if (req.url === '/api/health') { res.end('ok'); return; }
   if (req.url === '/api/hello') {
     res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ msg: 'hola desde el backend', pod: os.hostname(), now: new Date().toISOString() }));
+    res.end(JSON.stringify({ msg: 'hello from the backend', pod: os.hostname(), now: new Date().toISOString() }));
     return;
   }
   res.statusCode = 404;

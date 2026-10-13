@@ -31,7 +31,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-NIVEL = {0: "nadie", 30: "Developers y Maintainers", 40: "solo Maintainers", 60: "administradores"}
+NIVEL = {0: "no one", 30: "Developers and Maintainers", 40: "Maintainers only", 60: "administrators"}
 
 
 class Api:
@@ -78,18 +78,18 @@ def main():
     ap.add_argument("--url", default=os.environ.get("GITLAB_URL"))
     ap.add_argument("--grupo", action="append", default=[])
     ap.add_argument("--proyecto", action="append", default=[])
-    ap.add_argument("--plantillas", help="id del proyecto de plantillas (se trata aparte)")
+    ap.add_argument("--plantillas", help="id of the templates project (handled separately)")
     ap.add_argument("--merge", choices=["developer", "maintainer"], default="developer")
-    ap.add_argument("--tags", action="store_true", help="proteger etiquetas v* (solo Maintainers)")
+    ap.add_argument("--tags", action="store_true", help="protect v* tags (Maintainers only)")
     ap.add_argument("--desproteger-review", action="store_true")
     ap.add_argument("--aplicar", action="store_true")
     ap.add_argument("--ca")
     a = ap.parse_args()
     token = os.environ.get("GITLAB_TOKEN")
     if not a.url or not token:
-        sys.exit("Define GITLAB_URL y GITLAB_TOKEN.")
+        sys.exit("Set GITLAB_URL and GITLAB_TOKEN.")
     if not (a.grupo or a.proyecto or a.plantillas):
-        sys.exit("Indica --grupo, --proyecto o --plantillas.")
+        sys.exit("Give --grupo, --proyecto or --plantillas.")
 
     api = Api(a.url, token, a.ca)
     merge_nivel = 30 if a.merge == "developer" else 40
@@ -97,12 +97,12 @@ def main():
     avisos = 0
 
     def hecho(txt):
-        print("  [HECHO]   " + txt)
+        print("  [DONE]    " + txt)
 
     def pend(txt):
         nonlocal pendientes
         pendientes += 1
-        print("  [CAMBIAR] " + txt)
+        print("  [CHANGE]  " + txt)
 
     def bien(txt):
         print("  [OK]      " + txt)
@@ -110,7 +110,7 @@ def main():
     def aviso(txt):
         nonlocal avisos
         avisos += 1
-        print("  [AVISO]   " + txt)
+        print("  [WARNING] " + txt)
 
     def proteger_rama(pid, rama, push, merge):
         """Returns True if it ends up as wanted (or if it could be applied)."""
@@ -120,76 +120,76 @@ def main():
             pushes = sorted(x["access_level"] for x in pb.get("push_access_levels", []))
             merges = sorted(x["access_level"] for x in pb.get("merge_access_levels", []))
             if pushes == [push] and merges == [merge] and not pb.get("allow_force_push"):
-                bien("%s protegida: push %s, merge %s, sin force push" % (rama, nivel_txt(push), nivel_txt(merge)))
+                bien("%s protected: push %s, merge %s, no force push" % (rama, nivel_txt(push), nivel_txt(merge)))
                 return
             actual = "push %s, merge %s%s" % (
                 "/".join(nivel_txt(x) for x in pushes), "/".join(nivel_txt(x) for x in merges),
-                ", force push PERMITIDO" if pb.get("allow_force_push") else "")
-            txt = "%s: ahora %s → debe ser push %s, merge %s" % (rama, actual, nivel_txt(push), nivel_txt(merge))
+                ", force push ALLOWED" if pb.get("allow_force_push") else "")
+            txt = "%s: now %s → must be push %s, merge %s" % (rama, actual, nivel_txt(push), nivel_txt(merge))
             if not a.aplicar:
                 return pend(txt)
             # There is no portable way to edit in 16.x: it is deleted and created again (a few moments without protection).
             api.pet("DELETE", "/projects/%d/protected_branches/%s" % (pid, nom))
         elif codigo == 404:
-            txt = "%s NO está protegida → push %s, merge %s" % (rama, nivel_txt(push), nivel_txt(merge))
+            txt = "%s is NOT protected → push %s, merge %s" % (rama, nivel_txt(push), nivel_txt(merge))
             if not a.aplicar:
                 return pend(txt)
         else:
-            return aviso("no pude consultar la protección de %s (%s)" % (rama, codigo))
+            return aviso("could not query the protection of %s (%s)" % (rama, codigo))
         c, r, _ = api.pet("POST", "/projects/%d/protected_branches" % pid,
                           cuerpo={"name": rama, "push_access_level": push, "merge_access_level": merge, "allow_force_push": False})
         if c in (200, 201):
             hecho(txt)
         else:
-            aviso("no pude proteger %s: %s %s" % (rama, c, str(r)[:200]))
+            aviso("could not protect %s: %s %s" % (rama, c, str(r)[:200]))
 
     def variables(pid):
         c0, _, _ = api.pet("GET", "/projects/%d/variables" % pid, {"per_page": 1})
         if c0 in (401, 403):
-            return aviso("sin permiso para leer las variables (%d): el token necesita ámbito `api` y rol Maintainer/Owner en este proyecto" % c0)
+            return aviso("no permission to read the variables (%d): the token needs the `api` scope and the Maintainer/Owner role in this project" % c0)
         if c0 != 200:
-            return aviso("no pude leer las variables (%s)" % c0)
+            return aviso("could not read the variables (%s)" % c0)
         for v in api.lista("/projects/%d/variables" % pid):
             clave, ambito, prot = v["key"], v.get("environment_scope", "*"), bool(v.get("protected"))
-            etiqueta = "%s (ámbito %s)" % (clave, ambito)
+            etiqueta = "%s (scope %s)" % (clave, ambito)
             if ambito == "production" and not prot:
                 if not a.aplicar:
-                    pend("variable %s NO es protegida" % etiqueta)
+                    pend("variable %s is NOT protected" % etiqueta)
                 else:
                     c, r, _ = api.pet("PUT", "/projects/%d/variables/%s" % (pid, urllib.parse.quote(clave, safe="")),
                                       params={"filter[environment_scope]": ambito}, cuerpo={"protected": True})
-                    hecho("variable %s ahora protegida" % etiqueta) if c == 200 else aviso("no pude proteger %s: %s" % (etiqueta, c))
+                    hecho("variable %s now protected" % etiqueta) if c == 200 else aviso("could not protect %s: %s" % (etiqueta, c))
             elif ambito == "production":
                 bien("variable %s protegida" % etiqueta)
             elif prot and (ambito == "*" or ambito.startswith("review")):
                 if a.desproteger_review:
                     if not a.aplicar:
-                        pend("variable %s es protegida y no llegaría a las ramas → desproteger" % etiqueta)
+                        pend("variable %s is protected and would not reach branches → unprotect" % etiqueta)
                     else:
                         c, r, _ = api.pet("PUT", "/projects/%d/variables/%s" % (pid, urllib.parse.quote(clave, safe="")),
                                           params={"filter[environment_scope]": ambito}, cuerpo={"protected": False})
-                        hecho("variable %s desprotegida" % etiqueta) if c == 200 else aviso("no pude desproteger %s: %s" % (etiqueta, c))
+                        hecho("variable %s unprotected" % etiqueta) if c == 200 else aviso("could not unprotect %s: %s" % (etiqueta, c))
                 else:
-                    aviso("variable %s es PROTEGIDA con ámbito de ramas: no llegará a las ramas de desarrollo y sus despliegues fallarán (--desproteger-review)" % etiqueta)
+                    aviso("variable %s is PROTECTED with a branch scope: it will not reach development branches and their deployments will fail (--desproteger-review)" % etiqueta)
 
     def etiquetas(pid):
         codigo, pt, _ = api.pet("GET", "/projects/%d/protected_tags/%s" % (pid, urllib.parse.quote("v*", safe="")))
         if codigo == 200:
             niveles = sorted(x["access_level"] for x in pt.get("create_access_levels", []))
             if niveles == [40]:
-                return bien("etiquetas v* protegidas: las crean solo Maintainers")
-            txt = "etiquetas v*: las crea %s → solo Maintainers" % "/".join(nivel_txt(x) for x in niveles)
+                return bien("v* tags protected: only Maintainers create them")
+            txt = "v* tags: created by %s → Maintainers only" % "/".join(nivel_txt(x) for x in niveles)
             if not a.aplicar:
                 return pend(txt)
             api.pet("DELETE", "/projects/%d/protected_tags/%s" % (pid, urllib.parse.quote("v*", safe="")))
         elif codigo == 404:
-            txt = "etiquetas v* sin proteger → las crean solo Maintainers"
+            txt = "v* tags unprotected → only Maintainers create them"
             if not a.aplicar:
                 return pend(txt)
         else:
-            return aviso("no pude consultar las etiquetas protegidas (%s)" % codigo)
+            return aviso("could not query the protected tags (%s)" % codigo)
         c, r, _ = api.pet("POST", "/projects/%d/protected_tags" % pid, cuerpo={"name": "v*", "create_access_level": 40})
-        hecho(txt) if c in (200, 201) else aviso("no pude proteger las etiquetas: %s %s" % (c, str(r)[:200]))
+        hecho(txt) if c in (200, 201) else aviso("could not protect the tags: %s %s" % (c, str(r)[:200]))
 
     proyectos = {}
     for g in a.grupo:
@@ -198,17 +198,17 @@ def main():
     for pid in a.proyecto:
         c, p, _ = api.pet("GET", "/projects/%s" % pid)
         if c != 200:
-            sys.exit("proyecto %s: %s" % (pid, c))
+            sys.exit("project %s: %s" % (pid, c))
         proyectos[p["id"]] = p
     if a.plantillas:
         proyectos.pop(int(a.plantillas), None)
 
-    print("Modo: %s · merge a la rama por defecto: %s" % ("APLICAR" if a.aplicar else "REVISIÓN (no cambia nada)", nivel_txt(merge_nivel)))
+    print("Mode: %s · merge to the default branch: %s" % ("APPLY" if a.aplicar else "REVIEW (changes nothing)", nivel_txt(merge_nivel)))
     for pid, p in sorted(proyectos.items()):
         print("\n%s (id %d)" % (p.get("path_with_namespace", pid), pid))
         rama = p.get("default_branch")
         if not rama:
-            aviso("sin rama por defecto (¿repositorio vacío?)")
+            aviso("no default branch (empty repository?)")
         else:
             proteger_rama(pid, rama, 0, merge_nivel)
         variables(pid)
@@ -219,27 +219,27 @@ def main():
         pid = int(a.plantillas)
         c, p, _ = api.pet("GET", "/projects/%d" % pid)
         if c != 200:
-            sys.exit("plantillas %s: %s" % (pid, c))
-        print("\nPLANTILLAS: %s (id %d)" % (p["path_with_namespace"], pid))
+            sys.exit("templates %s: %s" % (pid, c))
+        print("\nTEMPLATES: %s (id %d)" % (p["path_with_namespace"], pid))
         if p.get("default_branch"):
             proteger_rama(pid, p["default_branch"], 0, 40)
         else:
-            aviso("no veo la rama por defecto de las plantillas (¿el token tiene rol suficiente?)")
+            aviso("cannot see the templates' default branch (does the token have a sufficient role?)")
         escritores = [m for m in api.lista("/projects/%d/members/all" % pid) if 30 <= m["access_level"] < 40]
         if escritores:
-            aviso("%d usuario(s) con rol Developer en las plantillas (heredado del grupo): %s" % (
+            aviso("%d user(s) with the Developer role on the templates (inherited from the group): %s" % (
                 len(escritores), ", ".join(m["username"] for m in escritores[:15])))
-            aviso("Un Developer puede crear una rama con una plantilla distinta y usarla con `include: ref:` en su proyecto.")
-            aviso("Para evitarlo, las plantillas deben vivir en un grupo donde los desarrolladores sean Reporter (solo lectura).")
+            aviso("A Developer can create a branch with a different template and use it with `include: ref:` in their project.")
+            aviso("To prevent this, templates should live in a group where developers are Reporter (read-only).")
             pendientes += 1
         else:
-            bien("nadie con rol Developer en las plantillas")
+            bien("nobody with the Developer role on the templates")
 
     if avisos and not pendientes and not a.aplicar:
-        print("\nNO PUEDO DAR EL ESTADO POR BUENO: %d aviso(s) sin comprobar (revisa permisos del token)." % avisos)
+        print("\nCANNOT REPORT THE STATE AS GOOD: %d warning(s) unchecked (review the token permissions)." % avisos)
         sys.exit(2)
-    print("\n%s" % ("Cambios aplicados. Vuelve a ejecutar sin --aplicar para comprobarlo." if a.aplicar
-                    else ("Hay %d cosa(s) por cambiar." % pendientes if pendientes else "Todo está como debe.")))
+    print("\n%s" % ("Changes applied. Run again without --aplicar to verify." if a.aplicar
+                    else ("%d thing(s) to change." % pendientes if pendientes else "Everything is as it should be.")))
     sys.exit(1 if (pendientes and not a.aplicar) else 0)
 
 

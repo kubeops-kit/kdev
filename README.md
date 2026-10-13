@@ -47,8 +47,9 @@ To run the first three locally: `pip install shellcheck-py yamllint cel-python p
 
 ## Language
 
-Documentation and code comments are in English. The scripts' subcommands, output messages and
-identifiers (e.g. `aplicar`, `probar`, `estado`) are still in Spanish; the READMEs include short glossaries where it matters.
+Documentation, code comments and the scripts' messages are in English. The scripts' subcommand names, flags and
+identifiers (e.g. `aplicar`, `probar`, `estado`, `--aplicar`) are still in Spanish, to keep their interface stable; the READMEs
+list rough English equivalents where it matters.
 
 ## Contributing
 

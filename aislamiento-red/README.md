@@ -20,7 +20,7 @@ Calico already enforces ingress and egress (checked by `probar-netpol.sh`). Ever
 
 1. **Test with temporary pods.** It does not touch any real environment and cleans up when done:
    `sh aislar.sh probar --externo DB_IP:PORT`
-   Use the IP and port of a real database that the applications use. It must print `fallos 0 · inconclusos 0`.
+   Use the IP and port of a real database that the applications use. It must print `Summary: failures 0 · inconclusive 0`.
 2. **One real environment as a canary** (a branch one, not production):
    `sh aislar.sh aplicar --ns app-hola-k8s-review-XXXX`
    `sh aislar.sh verificar --ns app-hola-k8s-review-XXXX --url http://<environment-url>/ --url http://<environment-url>/api/health`
@@ -31,8 +31,8 @@ Calico already enforces ingress and egress (checked by `probar-netpol.sh`). Ever
 
 `sh aislar.sh estado` lists which namespaces have the policy and which do not.
 
-> The script's subcommands and its output messages are in Spanish (`probar`, `aplicar`, `verificar`, `quitar`,
-> `instalar`, `desinstalar`, `estado`). Rough equivalents: test, apply, verify, remove, install, uninstall, status.
+> The script's subcommands are in Spanish (`probar`, `aplicar`, `verificar`, `quitar`, `instalar`, `desinstalar`,
+> `estado`); its messages are in English. Rough equivalents: test, apply, verify, remove, install, uninstall, status.
 
 ## Settings you may need
 

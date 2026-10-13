@@ -31,12 +31,12 @@ CA="${CA:-}"
 DOMAIN_DEV="${DOMAIN_DEV:-dev.example.com}"
 DOMAIN_KDEV="${DOMAIN_KDEV:-kdev.example.com}"
 DOMAIN_PROD="${DOMAIN_PROD:-apps.example.com}"
-command -v curl >/dev/null || { echo "ERROR: falta curl" >&2; exit 2; }
-command -v getent >/dev/null || { echo "ERROR: falta getent" >&2; exit 2; }
-command -v timeout >/dev/null || { echo "ERROR: falta timeout (paquete coreutils)" >&2; exit 2; }
+command -v curl >/dev/null || { echo "ERROR: curl is missing" >&2; exit 2; }
+command -v getent >/dev/null || { echo "ERROR: getent is missing" >&2; exit 2; }
+command -v timeout >/dev/null || { echo "ERROR: timeout is missing (coreutils package)" >&2; exit 2; }
 
 if [ -n "${SOLO_LOS_MIOS:-}" ]; then hosts=("$@"); else hosts=("$DOMAIN_KDEV" "comprobacion-$RANDOM.$DOMAIN_DEV" "comprobacion-$RANDOM.$DOMAIN_PROD" "$@"); fi
-[ "${#hosts[@]}" -gt 0 ] || { echo "No hay nombres que comprobar." >&2; exit 2; }
+[ "${#hosts[@]}" -gt 0 ] || { echo "There are no names to check." >&2; exit 2; }
 bad=0
 
 code_of() { # URL [header]  ->  HTTP code, 000 if there is no connection
@@ -59,26 +59,26 @@ https_state() { # host -> ok:<code> | cert | sin
 
 describe() { # code -> phrase
   case "$1" in
-    2*|3*) echo "abre" ;;
-    404) echo "llega a Traefik, pero no hay ningún Ingress para ese nombre" ;;
-    502|503|504) echo "llega al clúster, pero la aplicación no está lista (pods, ruta de salud)" ;;
-    000) echo "no hay conexión" ;;
-    *) echo "responde $1" ;;
+    2*|3*) echo "opens" ;;
+    404) echo "reaches Traefik, but there is no Ingress for that name" ;;
+    502|503|504) echo "reaches the cluster, but the application is not ready (pods, health route)" ;;
+    000) echo "no connection" ;;
+    *) echo "answers $1" ;;
   esac
 }
 
-printf '%-52s %s\n' "NOMBRE" "RESULTADO"
+printf '%-52s %s\n' "NAME" "RESULT"
 for h in "${hosts[@]}"; do
   echo "------------------------------------------------------------------------------------------"
   ip="$(timeout 6 getent ahostsv4 "$h" 2>/dev/null | awk 'NR==1{print $1}')"
   if [ -z "$ip" ]; then
-    printf '%-52s FALLA en el DNS: el nombre no resuelve.\n' "$h"
-    echo "    -> Pide a redes el registro (ver SOLICITUD-REDES.md)."
+    printf '%-52s FAILS at DNS: the name does not resolve.\n' "$h"
+    echo "    -> Ask the network team for the record (see SOLICITUD-REDES.md)."
     bad=1; continue
   fi
   printf '%-52s DNS ok -> %s\n' "$h" "$ip"
   if [ -n "$VIP" ] && [ "$ip" != "$VIP" ]; then
-    echo "    FALLA: resuelve a $ip, no a la IP del balanceador ($VIP)."; bad=1; continue
+    echo "    FAILS: resolves to $ip, not to the load balancer IP ($VIP)."; bad=1; continue
   fi
 
   http="$(code_of "http://$h:$PORT_HTTP/")"
@@ -86,32 +86,32 @@ for h in "${hosts[@]}"; do
   echo "    HTTP  ($PORT_HTTP): $http  $(describe "$http")"
   case "$hs" in
     ok:*) echo "    HTTPS ($PORT_HTTPS): ${hs#ok:}  $(describe "${hs#ok:}")" ;;
-    cert) echo "    HTTPS ($PORT_HTTPS): FALLA el certificado (la CA no se reconoce, o el certificado no cubre este nombre)." ;;
-    sin)  echo "    HTTPS ($PORT_HTTPS): sin respuesta." ;;
+    cert) echo "    HTTPS ($PORT_HTTPS): certificate FAILS (the CA is not recognised, or the certificate does not cover this name)." ;;
+    sin)  echo "    HTTPS ($PORT_HTTPS): no response." ;;
   esac
 
   if [ -n "$TRAEFIK" ]; then
     d="$(code_of "http://$TRAEFIK:$PORT_HTTP/" "Host: $h")"
-    echo "    Directo a $TRAEFIK con Host: $d  $(describe "$d")"
+    echo "    Direct to $TRAEFIK with Host: $d  $(describe "$d")"
   fi
 
   # Verdict
   if [ "$http" = "000" ] && [ "$hs" = "sin" ]; then
-    echo "    => FALLA en el balanceador: el nombre resuelve, pero nada responde. Falta el servicio virtual del A10 en esa IP y puerto, o el cortafuegos."
+    echo "    => FAILS at the load balancer: the name resolves, but nothing answers. The A10 virtual service is missing at that IP and port, or the firewall."
     bad=1
   elif [ "$http" = "000" ] && [ "$hs" = "cert" ]; then
-    echo "    => FALLA el certificado HTTPS y no hay HTTP. Revisa el certificado en el A10."
+    echo "    => the HTTPS certificate FAILS and there is no HTTP. Check the certificate on the A10."
     bad=1
   elif [ "$hs" = "cert" ]; then
-    echo "    => llega por HTTP, pero el certificado HTTPS falla (CA no reconocida o no cubre este nombre)."
+    echo "    => reaches over HTTP, but the HTTPS certificate fails (CA not recognised or does not cover this name)."
     bad=1
   elif [ "$hs" = "sin" ]; then
-    echo "    => llega por HTTP; el HTTPS todavía no responde."
+    echo "    => reaches over HTTP; HTTPS does not answer yet."
   else
-    echo "    => llega al clúster."
+    echo "    => reaches the cluster."
   fi
 done
 
 echo "------------------------------------------------------------------------------------------"
-if [ "$bad" = 0 ]; then echo "Todos los nombres llegan al clúster."; else echo "Hay nombres que no llegan: mira los FALLA de arriba."; fi
+if [ "$bad" = 0 ]; then echo "All the names reach the cluster."; else echo "Some names do not reach it: look at the FAILS above."; fi
 exit "$bad"

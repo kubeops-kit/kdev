@@ -76,5 +76,5 @@ the projects. The script detects this (`--plantillas`) and lists who has write a
 ## What was tested
 
 The script was tested against a stateful simulated GitLab (review, apply, and repeating the review: it ends with
-"Todo está como debe", i.e. everything is as it should be). **Not against your GitLab 16.3.** If a step returns an API error, the script shows it with the
+"Everything is as it should be"). **Not against your GitLab 16.3.** If a step returns an API error, the script shows it with the
 HTTP code; include it when reporting the problem.

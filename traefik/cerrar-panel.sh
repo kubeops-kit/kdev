@@ -24,8 +24,8 @@ COPIA="${COPIA:-/tmp/traefik-dashboard-regla-original.txt}"
 
 cmd="${1:-}"
 [ -n "$cmd" ] || { sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
-for b in kubectl curl python3; do command -v "$b" >/dev/null || { echo "ERROR: falta $b" >&2; exit 2; }; done
-: "${TRAEFIK:?Falta TRAEFIK (IP de un nodo del clúster)}"
+for b in kubectl curl python3; do command -v "$b" >/dev/null || { echo "ERROR: $b is missing" >&2; exit 2; }; done
+: "${TRAEFIK:?TRAEFIK is missing (IP of a cluster node)}"
 
 # ---- utilities ----
 ruta_json() { kubectl -n "$NS" get ingressroute "$NAME" -o json; }
@@ -64,17 +64,17 @@ abre() { case "$1" in 200|301|302|303|307|308|401|403) return 0 ;; *) return 1 ;
 nombre_inventado="nombre-inventado-$RANDOM.prueba.example.com"
 
 estado() {
-  echo "Ruta $NS/$NAME"
-  echo "  Regla:        $(regla_actual)"
+  echo "Route $NS/$NAME"
+  echo "  Rule:         $(regla_actual)"
   echo "  EntryPoints:  $(entrypoints)"
   local c; c="$(codigo "$nombre_inventado" /api/rawdata)"
-  echo "  Un nombre inventado ($nombre_inventado):"
+  echo "  A made-up name ($nombre_inventado):"
   echo "     /api/rawdata -> HTTP $c"
   if cuerpo_es_api_traefik "$nombre_inventado"; then
-    echo "     => EXPUESTA: la API interna de Traefik responde bajo cualquier nombre."
+    echo "     => EXPOSED: Traefik's internal API answers under any name."
     return 10
   fi
-  echo "     => no expone la API bajo un nombre cualquiera."
+  echo "     => it does not expose the API under an arbitrary name."
   return 0
 }
 
@@ -87,8 +87,8 @@ patch_regla() { # new rule
 revertir() {
   local regla="$ORIGINAL"
   [ -s "$COPIA" ] && regla="$(cat "$COPIA")"
-  echo "Volviendo a la regla original: $regla"
-  patch_regla "$regla" && echo "Revertido." || { echo "ERROR al revertir. Comando a mano:" >&2
+  echo "Going back to the original rule: $regla"
+  patch_regla "$regla" && echo "Reverted." || { echo "ERROR while reverting. Command to run by hand:" >&2
     echo "  kubectl -n $NS patch ingressroute $NAME --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/routes/0/match\",\"value\":\"PathPrefix(\`/api\`) || PathPrefix(\`/dashboard\`)\"}]'" >&2; return 1; }
 }
 
@@ -97,54 +97,54 @@ case "$cmd" in
     estado; rc=$?
     echo "  KubeDev ($KDEV_HOST): /api/health -> HTTP $(codigo "$KDEV_HOST" /api/health)"
     echo
-    echo "Cómo abres el panel? Pruébalo con el nombre que uses, por ejemplo:"
+    echo "How do you open the dashboard? Try it with the name you use, for example:"
     echo "  curl -sk -o /dev/null -w '%{http_code}\n' -H 'Host: traefik.example.com' http://$TRAEFIK/dashboard/"
     exit $rc
     ;;
 
   cerrar)
     host="${2:-}"
-    [ -n "$host" ] || { echo "Falta el nombre con el que se abre el panel (por ejemplo traefik.example.com)." >&2; exit 1; }
-    case "$host" in *[!A-Za-z0-9.-]*|.*|*..*) echo "ERROR: «$host» no parece un nombre de host válido." >&2; exit 1 ;; esac
+    [ -n "$host" ] || { echo "The name the dashboard is opened with is missing (for example traefik.example.com)." >&2; exit 1; }
+    case "$host" in *[!A-Za-z0-9.-]*|.*|*..*) echo "ERROR: \"$host\" does not look like a valid host name." >&2; exit 1 ;; esac
     actual="$(regla_actual)" || exit 3
-    case "$actual" in *"Host("*) echo "La regla ya incluye un Host:"; echo "  $actual"; echo "Nada que hacer."; exit 0 ;; esac
+    case "$actual" in *"Host("*) echo "The rule already includes a Host:"; echo "  $actual"; echo "Nothing to do."; exit 0 ;; esac
 
-    echo "=== Antes de tocar nada"
+    echo "=== Before touching anything"
     estado >/dev/null
     antes_panel="$(codigo "$host" /dashboard/)"
     antes_kdev="$(codigo "$KDEV_HOST" /api/health)"
-    echo "  Panel con el nombre $host: /dashboard/ -> HTTP $antes_panel"
+    echo "  Dashboard with name $host: /dashboard/ -> HTTP $antes_panel"
     echo "  KubeDev: /api/health -> HTTP $antes_kdev"
-    abre "$antes_panel" || { echo "AVISO: el panel no abre ahora con ese nombre. Si lo abres por IP o con otro nombre, cerrar la ruta te dejaría sin acceso. No sigo." >&2; exit 4; }
+    abre "$antes_panel" || { echo "WARNING: the dashboard does not open with that name right now. If you open it by IP or with another name, closing the route would lock you out. I am stopping." >&2; exit 4; }
 
     printf '%s' "$actual" > "$COPIA"
     kubectl -n "$NS" get ingressroute "$NAME" -o yaml > "$COPIA.yaml" 2>/dev/null || true
-    echo "Copia de la regla original en $COPIA"
+    echo "Copy of the original rule in $COPIA"
 
     nueva="Host(\`$host\`) && ($actual)"
-    echo "=== Aplicando"; echo "  $nueva"
-    patch_regla "$nueva" || { echo "ERROR al aplicar el cambio." >&2; exit 5; }
+    echo "=== Applying"; echo "  $nueva"
+    patch_regla "$nueva" || { echo "ERROR while applying the change." >&2; exit 5; }
     sleep "$ESPERA"
 
-    echo "=== Comprobando"
+    echo "=== Checking"
     fallo=0
-    c1="$(codigo "$host" /dashboard/)";           echo "  Panel con $host:            /dashboard/ -> HTTP $c1"; abre "$c1" || fallo=1
-    c2="$(codigo "$nombre_inventado" /api/rawdata)"; echo "  Nombre inventado:          /api/rawdata -> HTTP $c2"
-    if cuerpo_es_api_traefik "$nombre_inventado"; then echo "     sigue EXPUESTA"; fallo=1; fi
+    c1="$(codigo "$host" /dashboard/)";           echo "  Dashboard with $host:        /dashboard/ -> HTTP $c1"; abre "$c1" || fallo=1
+    c2="$(codigo "$nombre_inventado" /api/rawdata)"; echo "  Made-up name:              /api/rawdata -> HTTP $c2"
+    if cuerpo_es_api_traefik "$nombre_inventado"; then echo "     still EXPOSED"; fallo=1; fi
     c3="$(codigo "$KDEV_HOST" /api/health)";      echo "  KubeDev:                   /api/health -> HTTP $c3"
-    [ "$antes_kdev" = "$c3" ] || { echo "     KubeDev cambió de $antes_kdev a $c3"; fallo=1; }
+    [ "$antes_kdev" = "$c3" ] || { echo "     KubeDev changed from $antes_kdev to $c3"; fallo=1; }
 
     if [ "$fallo" -ne 0 ]; then
-      echo; echo "Alguna comprobación ha fallado: REVIERTO."
+      echo; echo "A check failed: REVERTING."
       revertir; exit 6
     fi
-    echo; echo "Hecho: el panel solo responde con $host."
-    echo "Si KubeDev lleva la anotación de prioridad, ya no hace falta. Para quitarla y comprobar que sigue bien:"
+    echo; echo "Done: the dashboard now only answers with $host."
+    echo "If KubeDev carries the priority annotation, it is no longer needed. To remove it and check that it still works:"
     echo "  kubectl -n kdev annotate ingress kdev traefik.ingress.kubernetes.io/router.priority-"
-    echo "  curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: $KDEV_HOST' http://$TRAEFIK/api/health      # debe seguir siendo 200"
-    echo "Para deshacer este cambio: bash $0 revertir"
+    echo "  curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: $KDEV_HOST' http://$TRAEFIK/api/health      # must still be 200"
+    echo "To undo this change: bash $0 revertir"
     ;;
 
   revertir) revertir ;;
-  *) echo "Orden desconocida: $cmd" >&2; exit 1 ;;
+  *) echo "Unknown command: $cmd" >&2; exit 1 ;;
 esac

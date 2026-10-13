@@ -150,8 +150,8 @@ detects this (tests X01, X03 and X04) and does not let you move to enforce until
 ### 3.1 The policy, with each runner's identity
 
 It is `bash proteccion.sh probar`: 39 tests with `--dry-run=server` (nothing is created) impersonating each runner,
-with and without RBAC, and a simulated deployment with the real chart. It distinguishes **OK**, **FALLO** (failure: the policy does not
-do what it should), **PENDIENTE** (pending: a cleanup step is missing) and **SALTADO** (skipped: there was no reference namespace).
+with and without RBAC, and a simulated deployment with the real chart. It distinguishes **OK**, **FAIL** (the policy does not
+do what it should), **PENDING** (a cleanup step is missing) and **SKIPPED** (there was no reference namespace).
 The logic of the expressions can also be evaluated without a cluster with `probar-politicas-cel.py`.
 
 ### 3.2 The full flow

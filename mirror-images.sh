@@ -26,7 +26,7 @@ IMAGES=(
   "docker.io/library/nginx:1.27-alpine|base/nginx:1.27-alpine"
 )
 
-[[ "$K8S_TAG" != "CAMBIAR" ]] || { echo "Define K8S_TAG en el script"; exit 1; }
+[[ "$K8S_TAG" != "CAMBIAR" ]] || { echo "Set K8S_TAG in the script"; exit 1; }
 mkdir -p "$DIR"
 fname() { echo "$DIR/$(echo "$1" | tr '/:' '__').tar"; }
 
@@ -47,5 +47,5 @@ case "${1:-}" in
         "oci-archive:$(fname "$dst"):$dst" "docker://$HARBOR/$dst"
     done
     ;;
-  *) echo "Uso: $0 export|import"; exit 1 ;;
+  *) echo "Usage: $0 export|import"; exit 1 ;;
 esac
