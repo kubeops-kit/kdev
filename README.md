@@ -1,32 +1,38 @@
-# kdev — CI/CD y entornos efímeros sobre Kubernetes
+# kdev — CI/CD and ephemeral environments on Kubernetes
 
-Conjunto de manifiestos, charts, plantillas de pipeline GitLab y scripts para montar
-entornos de desarrollo (una rama = un entorno) y producción sobre Kubernetes, con
-separación de permisos, aislamiento de red y registro de imágenes (Harbor).
+A set of manifests, charts, GitLab pipeline templates and scripts to set up
+development environments (one branch = one environment) and production on Kubernetes, with
+permission separation, network isolation and an image registry (Harbor).
 
-## Contenido
+## Contents
 
-| Ruta | Qué es |
+| Path | What it is |
 |---|---|
-| `00-namespaces.yaml`, `10-rbac.yaml`, `20-admission-policy.yaml` | Namespaces, RBAC y políticas de admisión (CEL) |
-| `30-/31-runner-*-values.yaml` | Values de los runners de GitLab (build y deploy) |
-| `ci-template.yml`, `pipeline-*.yml` | Plantilla de pipeline y pipelines de prueba (Kaniko) |
-| `chart/kubeops-app/` | Chart Helm genérico para desplegar una app front + back |
-| `hola-k8s/` | Aplicación de ejemplo |
-| `propuesta-proteccion/` | Separación ramas/producción: runner protegido, políticas, scripts (ver su `LEEME.md`) |
-| `aislamiento-red/` | NetworkPolicies de aislamiento de pods de rama |
-| `credenciales-bd/` | Credenciales de BD por entorno vía variables de GitLab |
-| `harbor/` | Política de retención de imágenes en Harbor |
-| `dns/`, `traefik/` | Solicitud de DNS y cierre del panel de Traefik |
-| `mirror-images.sh`, `probar-netpol.sh` | Utilidades |
+| `00-namespaces.yaml`, `10-rbac.yaml`, `20-admission-policy.yaml` | Namespaces, RBAC and admission policies (CEL) |
+| `30-/31-runner-*-values.yaml` | Values for the GitLab runners (build and deploy) |
+| `ci-template.yml`, `pipeline-*.yml` | Pipeline template and test pipelines (Kaniko) |
+| `chart/kubeops-app/` | Generic Helm chart to deploy a front + back app |
+| `hola-k8s/` | Example application |
+| `propuesta-proteccion/` | Branch/production separation: protected runner, policies, scripts (see its `README.md`) |
+| `aislamiento-red/` | NetworkPolicies isolating branch pods |
+| `credenciales-bd/` | Per-environment DB credentials via GitLab variables |
+| `harbor/` | Image retention policy in Harbor |
+| `dns/`, `traefik/` | DNS request and closing the Traefik dashboard |
+| `mirror-images.sh`, `probar-netpol.sh` | Utilities |
 
-## Uso
+## Usage
 
-Cada carpeta tiene su propio `LEEME.md` con los pasos. Los valores específicos de cada
-entorno (URLs de GitLab/Harbor, dominios, CIDRs) hay que adaptarlos a tu clúster.
-Los tokens se pasan por variables de entorno (`GITLAB_TOKEN`, `HARBOR_PASS`); no se
-guardan en el repositorio.
+Each folder has its own `README.md` with the steps. Environment-specific values
+(GitLab/Harbor URLs, domains, CIDRs) must be adapted to your cluster; the ones in the
+repository (`example.com`, etc.) are placeholders.
+Tokens are passed through environment variables (`GITLAB_TOKEN`, `HARBOR_PASS`); they are never
+stored in the repository.
 
-## Licencia
+## Language
 
-Apache License 2.0. Ver [LICENSE](LICENSE).
+The folder READMEs are in English. The scripts (their comments, subcommands and output messages) and
+a few documents (`dns/SOLICITUD-REDES.md`, `propuesta-proteccion/PROTEGER-*.md`) are still in Spanish.
+
+## License
+
+Apache License 2.0. See [LICENSE](LICENSE).

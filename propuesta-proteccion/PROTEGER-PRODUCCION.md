@@ -125,7 +125,7 @@ mano en *Manage, Members* (a nivel de grupo `desarrollo-k8s` o de proyecto).
 Todo lo del clúster va en un solo script, `proteccion.sh`, con comprobaciones en cada paso. Las políticas
 empiezan en **modo aviso** (avisan cuando habrían bloqueado, sin bloquear) y solo pasan a bloquear cuando la
 batería de pruebas sale limpia. **Los despliegues de ramas siguen funcionando durante todo el proceso.**
-El orden y el detalle están en `LEEME.md`; resumido:
+El orden y el detalle están en `README.md`; resumido:
 
 ```bash
 bash proteccion.sh aplicar                       # SA y RBAC del runner de producción + políticas en aviso
