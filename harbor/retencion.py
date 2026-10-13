@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
-Retención de Harbor: SIMULA la política de un proyecto y comprueba que no borraría ninguna imagen en uso.
+Harbor retention: SIMULATES a project's policy and checks that it would not delete any image in use.
 
-Es de solo lectura sobre las imágenes: lanza siempre una ejecución en modo simulacro (dry run) y lee el
-resultado. No hay ninguna opción para borrar de verdad; eso se hace a mano desde la interfaz de Harbor.
+It is read-only with respect to images: it always launches a run in dry-run mode and reads the
+result. There is no option to really delete; that is done by hand from the Harbor UI.
 
-Uso:
+Usage:
   python3 retencion.py --harbor https://harbor.example.com --ca ca-harbor.pem --user admin
-  python3 retencion.py ... --ultima        # analiza la última ejecución (por ejemplo una simulación lanzada desde la interfaz)
-  python3 retencion.py --solo-en-uso       # solo lista las imágenes que usan ahora los pods de apps (no necesita Harbor)
-  python3 retencion.py ... --existen       # comprueba que cada imagen en uso SIGUE existiendo en Harbor (úsalo tras una limpieza real)
+  python3 retencion.py ... --ultima        # analyses the last run (for example a simulation launched from the UI)
+  python3 retencion.py --solo-en-uso       # only lists the images the apps pods use right now (does not need Harbor)
+  python3 retencion.py ... --existen       # checks that every image in use STILL exists in Harbor (use it after a real cleanup)
 
-La contraseña se lee de la variable HARBOR_PASS o se pregunta sin mostrarla.
-Necesita kubectl con acceso al clúster para saber qué imágenes están en uso. Solo usa la biblioteca estándar.
-Código de salida: 0 todo bien, 1 se borraría alguna imagen en uso, 2 error.
+The password is read from the HARBOR_PASS variable or asked for without echoing it.
+Needs kubectl with cluster access to know which images are in use. Uses only the standard library.
+Exit code: 0 all good, 1 an image in use would be deleted, 2 error.
 """
 import argparse
 import base64
@@ -61,7 +61,7 @@ class Harbor:
 
 
 def check_exist(h, project):
-    """Comprueba que cada imagen que usa el clúster sigue en Harbor. Devuelve 1 si falta alguna."""
+    """Checks that every image the cluster uses is still in Harbor. Returns 1 if any is missing."""
     in_use = images_in_use(project)
     print(f"Comprobando que existen las {len(in_use)} imágenes de {project} que usa el clúster…")
     missing = 0
@@ -87,9 +87,9 @@ def fail(message, code=2):
     sys.exit(code)
 
 
-# ---------------------------------------------------------------- Clúster
+# ---------------------------------------------------------------- Cluster
 def images_in_use(project):
-    """Imágenes de Harbor que usan los pods del clúster ahora mismo: {(repositorio, etiqueta)}."""
+    """Harbor images the cluster's pods use right now: {(repository, tag)}."""
     try:
         out = subprocess.run(["kubectl", "get", "pods", "-A", "-o", "json"], capture_output=True, text=True, check=True).stdout
     except (OSError, subprocess.CalledProcessError) as e:
@@ -103,16 +103,16 @@ def images_in_use(project):
             if len(parts) < 3 or parts[1] != project:
                 continue
             repo = "/".join(parts[2:])
-            if "@" in repo:   # referencia por digest: no tiene etiqueta que comprobar
+            if "@" in repo:   # reference by digest: there is no tag to check
                 continue
             name, _, tag = repo.partition(":")
             found.setdefault((name, tag or "latest"), set()).add(where)
     return found
 
 
-# ---------------------------------------------------------------- Registro de la retención
+# ---------------------------------------------------------------- Retention log
 def parse_log(text):
-    """Filas de la tabla del registro: Digest | Tag | Kind | Labels | Pushed | Pulled | Created | Retention."""
+    """Rows of the log table: Digest | Tag | Kind | Labels | Pushed | Pulled | Created | Retention."""
     rows = []
     for line in text.splitlines():
         if "|" not in line:
@@ -128,7 +128,7 @@ def is_deleted(row):
     return row["retention"].startswith("DEL")
 
 
-# ---------------------------------------------------------------- Flujo
+# ---------------------------------------------------------------- Flow
 def run(args):
     password = os.environ.get("HARBOR_PASS") or getpass.getpass(f"Contraseña de {args.user} en Harbor: ")
     h = Harbor(args.harbor, args.user, password, args.ca)
@@ -193,7 +193,7 @@ def check_in_use(project, per_repo):
     print(f"\nImágenes de {project} en uso ahora mismo: {len(in_use)}")
     alerts = 0
     for (repo, tag), pods in sorted(in_use.items()):
-        # En el registro el repositorio aparece con o sin el prefijo del proyecto.
+        # In the log the repository appears with or without the project prefix.
         rows = per_repo.get(repo) or per_repo.get(f"{project}/{repo}")
         if rows is None:
             print(f"  ok       {repo}:{tag}  (el repositorio no entra en la política)")

@@ -1,4 +1,4 @@
-# Uso: pip install cel-python pyyaml && python3 probar-politicas-cel.py
+# Usage: pip install cel-python pyyaml && python3 probar-politicas-cel.py
 import yaml, celpy, json
 from celpy import json_to_cel
 
@@ -15,7 +15,7 @@ def run(expr, act):
     try:
         return bool(prog.evaluate({k: json_to_cel(v) for k, v in act.items()}))
     except Exception:
-        return False   # un error de CEL deniega (failurePolicy: Fail)
+        return False   # a CEL error denies (failurePolicy: Fail)
 
 def decide(policy_name, user, op, resource, name=None, namespace="", obj=None, ns_obj=None):
     spec = policies[policy_name]
@@ -23,7 +23,7 @@ def decide(policy_name, user, op, resource, name=None, namespace="", obj=None, n
                        "name": name or "", "namespace": namespace},
            "object": obj or {"metadata": {}}, "namespaceObject": ns_obj or {"metadata": {}}}
     if not run(spec['matchConditions'][0]['expression'], act):
-        return "NO APLICA"          # la política no mira a este usuario
+        return "NO APLICA"          # the policy does not look at this user
     for v in spec['validations']:
         if not run(v['expression'], act):
             return "DENEGADO"
@@ -38,7 +38,7 @@ def ns(env_label, psa="baseline", extra=None):
 
 R, P = "ci-deploy-ramas", "ci-deploy-produccion"
 cases = [
- # (descripción, política, usuario, op, recurso, nombre, namespace, objeto, ns_obj, esperado)
+ # (description, policy, user, op, resource, name, namespace, object, ns_obj, expected)
  ("RAMAS crea ns de rama correcto",                         R, REVIEW_SA, "CREATE", "namespaces", "app-hola-k8s-review-feature-x-a1b2c3", "", ns("review"), None, "PERMITIDO"),
  ("RAMAS crea ns de rama sin etiqueta env",                 R, REVIEW_SA, "CREATE", "namespaces", "app-hola-review-x-a1b2c3", "", ns(None), None, "DENEGADO"),
  ("RAMAS crea ns de rama con env=prod (suplantación)",      R, REVIEW_SA, "CREATE", "namespaces", "app-hola-review-x-a1b2c3", "", ns("prod"), None, "DENEGADO"),

@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
-# Uso:
-#   ./mirror-images.sh export   # en una máquina CON internet -> genera ./images/*.tar
-#   ./mirror-images.sh import   # en una máquina con acceso a Harbor (tras: skopeo login harbor...)
-# Requiere: skopeo
+# Usage:
+#   ./mirror-images.sh export   # on a machine WITH internet -> generates ./images/*.tar
+#   ./mirror-images.sh import   # on a machine with access to Harbor (after: skopeo login harbor...)
+# Requires: skopeo
 set -euo pipefail
 
 HARBOR="harbor.example.com"
 DIR="./images"
-CERTDIR=""            # directorio con la CA de Harbor (ca.crt) si no está en el sistema
+CERTDIR=""            # directory with Harbor's CA (ca.crt) if it is not in the system
 
-# --- Ajustar antes de usar ---------------------------------------------------
+# --- Adjust before use ---------------------------------------------------
 RUNNER_VER="17.6.0"
-K8S_TAG="CAMBIAR"     # tag de alpine/k8s con kubectl 1.35/1.36, p. ej. 1.36.0
-NODE_TAG="22-alpine"  # el que use el equipo de desarrollo
+K8S_TAG="CAMBIAR"     # alpine/k8s tag with kubectl 1.35/1.36, e.g. 1.36.0
+NODE_TAG="22-alpine"  # the one the development team uses
 # -----------------------------------------------------------------------------
 
-# origen | destino (sin el registro de destino)
+# source | destination (without the destination registry)
 IMAGES=(
   "docker.io/gitlab/gitlab-runner:alpine-v${RUNNER_VER}|ci/gitlab-runner:alpine-v${RUNNER_VER}"
   "docker.io/gitlab/gitlab-runner-helper:x86_64-v${RUNNER_VER}|ci/gitlab-runner-helper:x86_64-v${RUNNER_VER}"

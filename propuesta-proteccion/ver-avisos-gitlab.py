@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Busca en los logs de los jobs de despliegue de GitLab los avisos de las políticas de admisión.
+"""Searches the logs of GitLab deployment jobs for admission policy warnings.
 
-Con las políticas en modo aviso, un despliegue legítimo NO debe provocar ningún
-«Validation failed for ValidatingAdmissionPolicy ...». Si aparece alguno, esa política habría
-bloqueado un pipeline real: hay que entender por qué antes de pasar a enforce.
+With the policies in warning mode, a legitimate deployment must NOT trigger any
+"Validation failed for ValidatingAdmissionPolicy ...". If one appears, that policy would have
+blocked a real pipeline: you must understand why before switching to enforce.
 
-Uso:
+Usage:
   export GITLAB_URL=http://gitlab.example.com
-  export GITLAB_TOKEN=glpat-...        # ámbito read_api (y ser miembro de los proyectos)
-  python3 -I ver-avisos-gitlab.py --grupo 12            # todos los proyectos del grupo y subgrupos
+  export GITLAB_TOKEN=glpat-...        # read_api scope (and be a member of the projects)
+  python3 -I ver-avisos-gitlab.py --grupo 12            # all projects of the group and subgroups
   python3 -I ver-avisos-gitlab.py --proyecto 34 --proyecto 35
 
-Por defecto mira desde que se aplicaron las políticas (estado/aplicado.env) y escribe estado/gitlab.env,
-que proteccion.sh enforce usa como evidencia. Solo usa la biblioteca estándar de Python.
+By default it looks from when the policies were applied (estado/aplicado.env) and writes estado/gitlab.env,
+which proteccion.sh enforce uses as evidence. Uses only the Python standard library.
 """
 import argparse
 import datetime
@@ -68,7 +68,7 @@ class Cliente:
             with self._abrir(ruta) as r:
                 return r.read().decode("utf-8", "replace")
         except urllib.error.HTTPError as e:
-            if e.code == 404:  # el log ya se borró (retención)
+            if e.code == 404:  # the log was already deleted (retention)
                 return ""
             raise
 
@@ -116,7 +116,7 @@ def main():
     for pid, nombre in sorted(proyectos.items()):
         for job in c.paginas("/projects/%d/jobs" % pid):
             if epoch(job["created_at"]) < desde:
-                break  # la lista viene de más reciente a más antigua
+                break  # the list comes from newest to oldest
             if job["name"] not in JOBS_DESPLIEGUE or job["status"] not in ("success", "failed"):
                 continue
             total += 1

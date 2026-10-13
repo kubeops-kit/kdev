@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# probar-netpol.sh: comprueba si tu clúster APLICA las NetworkPolicy (ingress y egress) antes de diseñar nada sobre ellas.
+# probar-netpol.sh: checks whether your cluster ENFORCES NetworkPolicies (ingress and egress) before designing anything on top of them.
 #
-# Crea un namespace temporal con 2 pods (servidor y cliente), comprueba que se ven, aplica una política que
-# lo impide y comprueba que ya no se ven. Al terminar (o si lo interrumpes) borra el namespace.
-# No toca ningún namespace existente. Imagen: busybox/alpine de tu Harbor (cambia IMG si usas otra).
+# Creates a temporary namespace with 2 pods (server and client), checks that they can see each other, applies a policy that
+# prevents it and checks that they no longer can. When finished (or if interrupted) it deletes the namespace.
+# It does not touch any existing namespace. Image: busybox/alpine from your Harbor (change IMG to use another).
 #
 #   bash probar-netpol.sh
 set -u

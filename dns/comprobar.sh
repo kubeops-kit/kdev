@@ -1,26 +1,26 @@
 #!/usr/bin/env bash
-# Comprueba, escalón a escalón, por qué una dirección no abre:
+# Checks, step by step, why an address does not open:
 #
-#   1. DNS            ¿el nombre resuelve, y a la IP del balanceador?
-#   2. Balanceador    ¿responde algo por HTTP y por HTTPS? ¿es válido el certificado?
-#   3. Traefik        ¿llega al clúster y sabe qué aplicación es?
-#   4. Directo        (opcional) lo mismo, saltándose DNS y balanceador, contra un nodo
+#   1. DNS            does the name resolve, and to the load balancer's IP?
+#   2. Balanceador    does anything answer over HTTP and HTTPS? is the certificate valid?
+#   3. Traefik        does it reach the cluster and know which application it is?
+#   4. Directo        (optional) the same, bypassing DNS and load balancer, against a node
 #
-# Uso:
-#   bash comprobar.sh                                  # nombres de prueba: kdev, y uno inventado de ramas y otro de producción
-#   bash comprobar.sh hola-k8s.example.com ...   # los que indiques (se añaden a los de prueba)
+# Usage:
+#   bash comprobar.sh                                  # test names: kdev, plus a made-up one for branches and another for production
+#   bash comprobar.sh hola-k8s.example.com ...   # the ones you specify (added to the test ones)
 #
-# Variables (todas opcionales):
-#   VIP        IP del balanceador A10: avisa si el nombre resuelve a otra distinta
-#   TRAEFIK    IP de un nodo del clúster: añade la prueba «directo», que separa red de aplicación
-#   CA         fichero PEM de la CA interna, para validar el certificado HTTPS
-#   DOMAIN_PROD  (apps.example.com)   subdominio de producción; si usas otro, indícalo
+# Variables (all optional):
+#   VIP        IP of the A10 load balancer: warns if the name resolves to a different one
+#   TRAEFIK    IP of a cluster node: adds the "direct" test, which separates network from application
+#   CA         PEM file of the internal CA, to validate the HTTPS certificate
+#   DOMAIN_PROD  (apps.example.com)   production subdomain; if you use another, set it
 #   PORT_HTTP  (80)   PORT_HTTPS  (443)
-#   SOLO_LOS_MIOS=1   no añade los nombres de prueba: comprueba únicamente los que pases como argumento
+#   SOLO_LOS_MIOS=1   does not add the test names: checks only the ones passed as arguments
 #
-# Los nombres «comprobacion-NNNN.dev...» y «comprobacion-NNNN.apps...» no existen a propósito: si el DNS comodín y el balanceador
-# están bien, responde 404 de Traefik. Ese 404 es la prueba de que todo funciona hasta el clúster.
-# Código de salida: 0 todo llega al clúster; 1 algún nombre falla antes.
+# The names "comprobacion-NNNN.dev..." and "comprobacion-NNNN.apps..." deliberately do not exist: if the wildcard DNS and the load balancer
+# are fine, Traefik answers 404. That 404 proves everything works up to the cluster.
+# Exit code: 0 everything reaches the cluster; 1 some name fails earlier.
 set -u
 
 PORT_HTTP="${PORT_HTTP:-80}"
@@ -39,14 +39,14 @@ if [ -n "${SOLO_LOS_MIOS:-}" ]; then hosts=("$@"); else hosts=("$DOMAIN_KDEV" "c
 [ "${#hosts[@]}" -gt 0 ] || { echo "No hay nombres que comprobar." >&2; exit 2; }
 bad=0
 
-code_of() { # URL [cabecera]  ->  código HTTP, 000 si no hay conexión
+code_of() { # URL [header]  ->  HTTP code, 000 if there is no connection
   local url="$1" extra="${2:-}" args=(-s -o /dev/null -w '%{http_code}' --max-time 6)
   [ -n "$CA" ] && args+=(--cacert "$CA")
   [ -n "$extra" ] && args+=(-H "$extra")
   curl "${args[@]}" "$url" 2>/dev/null || true
 }
 
-https_state() { # host -> ok:<código> | cert | sin
+https_state() { # host -> ok:<code> | cert | sin
   local args=(-sS -o /dev/null -w '%{http_code}' --max-time 6) err code
   [ -n "$CA" ] && args+=(--cacert "$CA")
   err="$(mktemp)"
@@ -57,7 +57,7 @@ https_state() { # host -> ok:<código> | cert | sin
   rm -f "$err"
 }
 
-describe() { # código -> frase
+describe() { # code -> phrase
   case "$1" in
     2*|3*) echo "abre" ;;
     404) echo "llega a Traefik, pero no hay ningún Ingress para ese nombre" ;;
@@ -95,7 +95,7 @@ for h in "${hosts[@]}"; do
     echo "    Directo a $TRAEFIK con Host: $d  $(describe "$d")"
   fi
 
-  # Veredicto
+  # Verdict
   if [ "$http" = "000" ] && [ "$hs" = "sin" ]; then
     echo "    => FALLA en el balanceador: el nombre resuelve, pero nada responde. Falta el servicio virtual del A10 en esa IP y puerto, o el cortafuegos."
     bad=1

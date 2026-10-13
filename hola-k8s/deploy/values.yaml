@@ -1,4 +1,4 @@
-# Solo lo propio de la app; el resto (imagen, host, nombre) lo pone el pipeline.
+# Only what is specific to the app; the rest (image, host, name) is set by the pipeline.
 frontend:
   port: 80
 backend:

@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
-"""Protege `main` y las variables de producción en los proyectos de GitLab 16.x por API.
+"""Protects `main` and the production variables in GitLab 16.x projects via API.
 
-Por defecto NO CAMBIA NADA: muestra lo que habría que cambiar (y sale con código 1 si hay algo).
-Con --aplicar lo cambia. Solo usa la biblioteca estándar.
+By default it CHANGES NOTHING: it shows what would have to change (and exits with code 1 if there is anything).
+With --aplicar it changes it. Uses only the standard library.
 
   export GITLAB_URL=http://gitlab.example.com
-  export GITLAB_TOKEN=glpat-...          # ámbito api, de un administrador o propietario del grupo
-  python3 -I proteger-gitlab.py --grupo 12                       # revisión previa
-  python3 -I proteger-gitlab.py --grupo 12 --aplicar             # aplicar
+  export GITLAB_TOKEN=glpat-...          # api scope, from an administrator or the group owner
+  python3 -I proteger-gitlab.py --grupo 12                       # dry review
+  python3 -I proteger-gitlab.py --grupo 12 --apply             # aplicar
 
-Qué comprueba / aplica en cada proyecto:
-  1. La rama por defecto está protegida: nadie hace push (ni force push) y el merge lo pueden hacer
-     Developers y Maintainers (--merge developer, por defecto) o solo Maintainers (--merge maintainer).
-  2. Las variables con ámbito `production` son protegidas (solo llegan a pipelines de ramas/etiquetas protegidas).
-  3. Avisa de variables PROTEGIDAS con ámbito `review/*` o `*`: no llegarían a las ramas de desarrollo y los
-     despliegues de rama fallarían por falta de credenciales. (--desproteger-review las corrige.)
-  4. Con --tags: protege las etiquetas `v*` para que solo las creen los Maintainers (publicar a producción
-     con etiqueta = separar «quien hace merge» de «quien publica», sin Premium). Exige cambiar la plantilla.
+What it checks / applies in each project:
+  1. The default branch is protected: nobody pushes (nor force pushes) and merging can be done by
+     Developers and Maintainers (--merge developer, the default) or only Maintainers (--merge maintainer).
+  2. Variables with scope `production` are protected (they only reach pipelines of protected branches/tags).
+  3. Warns about PROTECTED variables with scope `review/*` or `*`: they would not reach development branches and
+     branch deployments would fail for lack of credentials. (--desproteger-review fixes them.)
+  4. With --tags: protects `v*` tags so that only Maintainers create them (publishing to production
+     with a tag = separating "who merges" from "who publishes", without Premium). Requires changing the template.
 
-Aparte (--plantillas ID): el proyecto de plantillas debe poder escribirlo solo quien administra la plataforma.
-Se comprueba la protección de su rama y quién tiene permiso de escritura.
-Los valores de las variables nunca se leen en pantalla ni se guardan.
+Separately (--plantillas ID): the templates project should be writable only by whoever administers the platform.
+The protection of its branch and who has write permission are checked.
+Variable values are never printed to the screen nor stored.
 """
 import argparse
 import json
@@ -113,7 +113,7 @@ def main():
         print("  [AVISO]   " + txt)
 
     def proteger_rama(pid, rama, push, merge):
-        """Devuelve True si queda como se quiere (o si se pudo aplicar)."""
+        """Returns True if it ends up as wanted (or if it could be applied)."""
         nom = urllib.parse.quote(rama, safe="")
         codigo, pb, _ = api.pet("GET", "/projects/%d/protected_branches/%s" % (pid, nom))
         if codigo == 200:
@@ -128,7 +128,7 @@ def main():
             txt = "%s: ahora %s → debe ser push %s, merge %s" % (rama, actual, nivel_txt(push), nivel_txt(merge))
             if not a.aplicar:
                 return pend(txt)
-            # No hay forma portable de editar en 16.x: se borra y se vuelve a crear (instantes sin protección).
+            # There is no portable way to edit in 16.x: it is deleted and created again (a few moments without protection).
             api.pet("DELETE", "/projects/%d/protected_branches/%s" % (pid, nom))
         elif codigo == 404:
             txt = "%s NO está protegida → push %s, merge %s" % (rama, nivel_txt(push), nivel_txt(merge))

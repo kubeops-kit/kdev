@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
-# proteccion.sh: separa los permisos de los entornos de rama y de producción, empezando en MODO AVISO.
+# proteccion.sh: separates the permissions of branch and production environments, starting in WARNING MODE.
 #
-#   ./proteccion.sh preflight                 comprueba el clúster (solo lee)
-#   ./proteccion.sh aplicar                   crea SA/RBAC del runner de producción y las 2 políticas EN MODO AVISO
+#   ./proteccion.sh preflight                 checks the cluster (read-only)
+#   ./proteccion.sh aplicar                   creates SA/RBAC of the production runner and the 2 policies IN WARNING MODE
 #   ./proteccion.sh migrar [--aplicar] [--quitar-antiguos]
-#                                             etiqueta los namespaces app-* y da al runner de producción su RoleBinding
+#                                             labels the app-* namespaces and gives the production runner its RoleBinding
 #   ./proteccion.sh probar [--modo aviso|enforce]
-#                                             batería con --dry-run=server: no crea nada
+#                                             battery with --dry-run=server: creates nothing
 #   ./proteccion.sh enforce [--max-horas N] [--min-jobs N] [--sin-evidencia-gitlab]
-#                                             pasa a bloquear SOLO si la batería está limpia; si algo falla, vuelve a aviso
-#   ./proteccion.sh aviso                     vuelve a modo aviso (reversión inmediata)
-#   ./proteccion.sh estado                    modo actual y resultado de la última batería
-#   ./proteccion.sh crear-runner-gitlab       crea el runner protegido en GitLab por API (guarda el token en estado/)
+#                                             switches to blocking ONLY if the battery is clean; if anything fails, goes back to warning
+#   ./proteccion.sh aviso                     goes back to warning mode (immediate rollback)
+#   ./proteccion.sh estado                    current mode and result of the last battery
+#   ./proteccion.sh crear-runner-gitlab       creates the protected runner in GitLab via API (saves the token in estado/)
 #   ./proteccion.sh runner-prod --gitlab-url URL [--token-file F] [--chart F.tgz]
-#                                             instala el runner de producción en el clúster
+#                                             installs the production runner in the cluster
 #
-# Requisitos: bash, kubectl con permisos de administrador, sha256sum. helm solo para el despliegue simulado y el runner.
+# Requirements: bash, kubectl with administrator permissions, sha256sum. helm only for the simulated deployment and the runner.
 set -u
 
 AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -31,7 +31,7 @@ SA_P="system:serviceaccount:ci-deploy-prod:ci-deploy-prod-job"
 POL_R="ci-deploy-ramas"
 POL_P="ci-deploy-produccion"
 POL_VIEJA="ci-deploy-solo-app"
-N_REV="app-prueba-review-x-abc123"   # nombres de prueba: solo existen en peticiones --dry-run
+N_REV="app-prueba-review-x-abc123"   # test names: they only exist in --dry-run requests
 N_PROD="app-prueba-prod"
 
 c_ok=$'\033[32m'; c_mal=$'\033[31m'; c_av=$'\033[33m'; c_0=$'\033[0m'
@@ -45,7 +45,7 @@ die()  { echo "${c_mal}ERROR:${c_0} $*" >&2; exit 1; }
 mkdir -p "$ESTADO" 2>/dev/null || die "no puedo crear $ESTADO"
 
 # --------------------------------------------------------------------------------------------
-# Utilidades
+# Utilities
 # --------------------------------------------------------------------------------------------
 k() { "$KUBECTL" "$@"; }
 
@@ -69,7 +69,7 @@ hash_politicas() {
   } 2>/dev/null | sha256sum | cut -c1-16
 }
 
-leer_env() { # $1 = fichero; exporta sus variables con prefijo E_
+leer_env() { # $1 = file; exports its variables with the E_ prefix
   [ -f "$1" ] || return 1
   local l
   while IFS='=' read -r clave valor; do
@@ -176,7 +176,7 @@ cmd_migrar() {
       *) tipo="" ;;
     esac
     if [ -z "$tipo" ]; then pend "$ns: el nombre no es de rama ni de producción; revísalo a mano (las políticas no lo permitirán)"; pend=$((pend+1)); continue; fi
-    # 1) etiqueta kubeops/env
+    # 1) kubeops/env label
     if [ "$env" != "$tipo" ]; then
       if [ "$aplicar" -eq 1 ]; then k label ns "$ns" "kubeops/env=$tipo" --overwrite >/dev/null && ok "$ns: etiqueta kubeops/env=$tipo puesta" || { mal "$ns: no se pudo etiquetar"; pend=$((pend+1)); }
       else pend "$ns: falta la etiqueta kubeops/env=$tipo (actual: '${env:-ninguna}')"; pend=$((pend+1)); fi
@@ -221,7 +221,7 @@ cmd_migrar() {
 N_OK=0; N_FALLO=0; N_PEND=0; N_SALT=0
 LOGDET=""
 
-mf_ns() { # nombre env psa
+mf_ns() { # name env psa
   echo "apiVersion: v1"; echo "kind: Namespace"; echo "metadata:"; echo "  name: $1"
   if [ -n "$2" ] || [ -n "$3" ]; then
     echo "  labels:"
@@ -230,8 +230,8 @@ mf_ns() { # nombre env psa
   fi
 }
 
-# Ejecuta kubectl como el runner indicado. R = ramas, P = producción. real = solo RBAC+política; pol = salta RBAC (grupo system:masters)
-run_k() { # quien capa args...
+# Runs kubectl as the given runner. R = branches, P = production. real = RBAC+policy only; pol = bypasses RBAC (system:masters group)
+run_k() { # who layer args...
   local sa flags
   if [ "$1" = R ]; then sa="$SA_R"; else sa="$SA_P"; fi
   flags=(--as="$sa")
@@ -241,8 +241,8 @@ run_k() { # quien capa args...
   else k "${flags[@]}" "$@" 2>&1 </dev/null; fi
 }
 
-# Clasifica la salida y decide.   evaluar ID "descripción" ESPERA POLITICA RC "salida"
-# ESPERA: ok = debe pasar sin avisos · pol = la política debe actuar · bloq = política o RBAC · rbac = debe frenarlo RBAC
+# Classifies the output and decides.   evaluar ID "description" EXPECT POLICY RC "output"
+# EXPECT: ok = must pass without warnings · pol = the policy must act · bloq = policy or RBAC · rbac = RBAC must stop it
 evaluar() {
   local id="$1" desc="$2" espera="$3" pol="$4" rc="$5" out="$6"
   local nueva=no vieja=no rbac=no res detalle
@@ -281,7 +281,7 @@ evaluar() {
 
 saltar() { N_SALT=$((N_SALT+1)); echo "[SALTADO] $1  $2 → $3"; }
 
-# caso ID "desc" ESPERA POLITICA QUIEN CAPA NS_NECESARIO -- args kubectl (con MANIFEST opcional en el entorno)
+# caso ID "desc" EXPECT POLICY WHO LAYER REQUIRED_NS -- kubectl args (with optional MANIFEST in the environment)
 caso() {
   local id="$1" desc="$2" espera="$3" pol="$4" quien="$5" capa="$6"; shift 6
   local out rc
@@ -289,14 +289,14 @@ caso() {
   evaluar "$id" "$desc" "$espera" "$pol" "$rc" "$out"
 }
 
-caso_ns() { # ID desc ESPERA POL QUIEN CAPA nombre env psa
+caso_ns() { # ID desc EXPECT POL WHO LAYER name env psa
   local id="$1" desc="$2" espera="$3" pol="$4" quien="$5" capa="$6"
   MANIFEST="$(mf_ns "$7" "$8" "$9")"
   caso "$id" "$desc" "$espera" "$pol" "$quien" "$capa" create --dry-run=server -f -
   MANIFEST=""
 }
 
-caso_can_i() { # ID desc QUIEN recurso-args...   espera "no" (RBAC)
+caso_can_i() { # ID desc WHO resource-args...   expects "no" (RBAC)
   local id="$1" desc="$2" quien="$3"; shift 3
   local sa out
   if [ "$quien" = R ]; then sa="$SA_R"; else sa="$SA_P"; fi
@@ -306,13 +306,13 @@ caso_can_i() { # ID desc QUIEN recurso-args...   espera "no" (RBAC)
   else N_FALLO=$((N_FALLO+1)); mal "$id  $desc → respuesta inesperada: $out"; LOGDET="$LOGDET"$'\n'"--- $id: $out"$'\n'; fi
 }
 
-despliegue_simulado() { # ID quien ns
+despliegue_simulado() { # ID who ns
   local id="$1" quien="$2" ns="$3" sa out="" rc=0 r1 r2 pol
   if [ "$quien" = R ]; then sa="$SA_R"; pol="$POL_R"; else sa="$SA_P"; pol="$POL_P"; fi
-  # a) Secret como lo crea la plantilla
+  # a) Secret as the template creates it
   r1="$(k -n "$ns" create secret generic app-db-prueba --from-literal=DB_USER=x --from-literal=DB_PASSWORD=x --dry-run=client -o yaml 2>&1 | k --as="$sa" -n "$ns" apply --dry-run=server -f - 2>&1)"; rc=$?
   out="$r1"
-  # b) El chart real con la misma forma de llamada que la plantilla
+  # b) The real chart, called the same way as the template
   r2="$("$HELM" template prueba-proteccion "$CHART_DIR" -n "$ns" --set app=prueba-proteccion \
         --set image.registry=harbor.example.com/apps --set image.tag=prueba --set ingress.host=prueba-proteccion.dev.example.com 2>&1 \
         | k --as="$sa" -n "$ns" apply --dry-run=server -f - 2>&1)"; local rc2=$?
@@ -429,7 +429,7 @@ cmd_probar() {
 }
 
 # --------------------------------------------------------------------------------------------
-# enforce / aviso
+# enforce / warning
 # --------------------------------------------------------------------------------------------
 fijar_acciones() { # "Deny","Audit"
   local p
@@ -518,7 +518,7 @@ cmd_estado() {
 }
 
 # --------------------------------------------------------------------------------------------
-# Runner de producción
+# Production runner
 # --------------------------------------------------------------------------------------------
 cmd_crear_runner_gitlab() {
   : "${GITLAB_URL:?define GITLAB_URL, p. ej. http://gitlab.example.com}"

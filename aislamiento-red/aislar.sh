@@ -1,26 +1,26 @@
 #!/bin/sh
-# aislar.sh: aísla de la red los entornos de rama (app-*) con una NetworkPolicy gestionada por administración.
+# aislar.sh: isolates branch environments (app-*) from the network with an admin-managed NetworkPolicy.
 #
-# Qué hace la política `aislamiento-base` en cada namespace app-*:
-#   ENTRADA  solo desde el propio namespace y desde Traefik.
-#   SALIDA   solo al propio namespace, al DNS del clúster y a TODO lo que esté fuera del clúster
-#            (así da igual dónde estén las bases de datos), EXCEPTO los pods/servicios del clúster
-#            (otras aplicaciones, la API de Kubernetes) y las IP de los nodos (kubelet, k3s).
-# La crea este script, no el pipeline: si el ServiceAccount de CI pudiera crear NetworkPolicy, un job de rama
-# podría crear la suya que lo permitiese todo.
+# What the `aislamiento-base` policy does in each app-* namespace:
+#   INGRESS  only from the namespace itself and from Traefik.
+#   EGRESS   only to the namespace itself, the cluster DNS and EVERYTHING outside the cluster
+#            (so it does not matter where the databases are), EXCEPT the cluster's pods/services
+#            (other applications, the Kubernetes API) and the node IPs (kubelet, k3s).
+# This script creates it, not the pipeline: if the CI ServiceAccount could create NetworkPolicies, a branch job
+# could create its own that allowed everything.
 #
-#   sh aislar.sh render NAMESPACE                 muestra la política (no aplica nada)
-#   sh aislar.sh probar [--externo HOST:PUERTO]   prueba con pods temporales; no toca ningún entorno real
-#   sh aislar.sh aplicar --ns NAMESPACE           aplica a UN entorno (canario)
-#   sh aislar.sh verificar --ns NS [--url URL]... comprueba que ese entorno sigue funcionando
-#   sh aislar.sh quitar --ns NAMESPACE            retira la política de ese entorno (vuelta atrás inmediata)
-#   sh aislar.sh instalar [--incluir-prod]        CronJob que la mantiene en todos los entornos de rama
-#   sh aislar.sh desinstalar                      quita el CronJob (no quita las políticas ya aplicadas)
-#   sh aislar.sh estado                           qué namespaces la tienen y cuáles no
+#   sh aislar.sh render NAMESPACE                 shows the policy (applies nothing)
+#   sh aislar.sh probar [--externo HOST:PUERTO]   tests with temporary pods; does not touch any real environment
+#   sh aislar.sh aplicar --ns NAMESPACE           applies to ONE environment (canary)
+#   sh aislar.sh verificar --ns NS [--url URL]... checks that the environment still works
+#   sh aislar.sh quitar --ns NAMESPACE            removes the policy from that environment (immediate rollback)
+#   sh aislar.sh instalar [--incluir-prod]        CronJob that maintains it in all branch environments
+#   sh aislar.sh desinstalar                      removes the CronJob (does not remove policies already applied)
+#   sh aislar.sh estado                           which namespaces have it and which do not
 #
-# Variables: TRAEFIK_NS (traefik) · EXTRA_INGRESS_NS (lista separada por comas, p. ej. el namespace de
-# monitorización si hace scraping de los pods) · POD_SVC_CIDR (172.25.0.0/16) · EXTRA_EXCEPT (CIDR extra
-# a prohibir, separados por comas) · IMG (imagen de prueba) · KUBECTL
+# Variables: TRAEFIK_NS (traefik) · EXTRA_INGRESS_NS (comma-separated list, e.g. the
+# monitoring namespace if it scrapes the pods) · POD_SVC_CIDR (172.25.0.0/16) · EXTRA_EXCEPT (extra CIDRs
+# to forbid, comma-separated) · IMG (test image) · KUBECTL
 set -u
 KUBECTL="${KUBECTL:-kubectl}"
 NP_NAME=aislamiento-base
@@ -153,7 +153,7 @@ cmd_verificar() {
   nolisto="$(k -n "$ns" get pods --no-headers | awk '{split($2,a,"/"); if (a[1]!=a[2] || $3!="Running") print $1}')"
   if [ -n "$nolisto" ]; then echo "[FALLO] pods no listos: $nolisto"; mal=1; else echo "[OK] todos los pods listos"; fi
   for u in $urls; do
-    # -k: aquí solo se comprueba la conectividad; el certificado interno puede no estar en la CA de esta máquina
+    # -k: only connectivity is checked here; the internal certificate may not be in this machine's CA
     code="$(curl -sk -o /dev/null -m 10 -w '%{http_code}' "$u" 2>/tmp/aislar-curl.err)"; crc=$?
     case "$code" in
       2??|3??) echo "[OK] $u → $code" ;;
@@ -165,7 +165,7 @@ cmd_verificar() {
 }
 
 # ---------------------------------------------------------------------------------------------------------------
-# probar: pods temporales; compara el alcance antes y después de aplicar la política
+# probar: temporary pods; compares reachability before and after applying the policy
 # ---------------------------------------------------------------------------------------------------------------
 cmd_probar() {
   externo=""
@@ -201,7 +201,7 @@ cmd_probar() {
   vic_ip="$(k -n "$B" get pod vic -o jsonpath='{.status.podIP}')"
   echo "srv=$srv_ip  vic=$vic_ip  nodo=$nodo:10250  api=$api:443  externo=${externo:-(no indicado)}"
 
-  # medir NS POD HOST PORT -> rapido | lento   (lento = no hubo respuesta en 3 s: paquetes descartados)
+  # medir NS POD HOST PORT -> rapido | lento   (lento = no response within 3 s: packets dropped)
   medir() {
     k -n "$1" exec "$2" -- sh -c "s=\$(date +%s); wget -q -T 3 -O /dev/null http://$3:$4/ >/dev/null 2>&1; e=\$((\$(date +%s)-s)); if [ \$e -ge 3 ]; then echo lento; else echo rapido; fi" 2>/dev/null
   }
@@ -222,7 +222,7 @@ cmd_probar() {
 
   echo; echo "== Resultado (antes → después de la política) =="
   malos=0; inconclusos=0
-  # chequea ETIQUETA ANTES DESPUES ESPERADO(permite|bloquea)
+  # chequea LABEL BEFORE AFTER EXPECTED(permite|bloquea)
   chequea() {
     if [ "$2" != "rapido" ]; then echo "[INCONCLUSO] $1: ya no respondía antes de la política ($2 → $3); no se puede comparar"; inconclusos=$((inconclusos+1)); return; fi
     if [ "$4" = permite ]; then

@@ -1,5 +1,5 @@
-# Pipeline de prueba de la plataforma. Copiar como .gitlab-ci.yml en un proyecto vacío
-# dentro del grupo desarrollo-k8s.
+# Platform test pipeline. Copy it as .gitlab-ci.yml into an empty project
+# inside the desarrollo-k8s group.
 stages: [test]
 
 build_test:
@@ -9,11 +9,11 @@ build_test:
   script:
     - echo "hola desde $(hostname)"
     - id
-    # El job de build NO debe tener acceso a la API de Kubernetes
+    # The build job must NOT have access to the Kubernetes API
     - 'ls /var/run/secrets/kubernetes.io/serviceaccount 2>/dev/null && { echo "ERROR: hay token de ServiceAccount"; exit 1; } || echo "OK: sin token de ServiceAccount"'
-    # El clúster no tiene internet
+    # The cluster has no internet
     - 'wget -q -T 5 -O /dev/null http://example.com && { echo "ERROR: hay internet"; exit 1; } || echo "OK: sin internet"'
-    # Harbor debe ser alcanzable (lo necesitará Kaniko)
+    # Harbor must be reachable (Kaniko will need it)
     - wget -q -T 5 --no-check-certificate -O - https://harbor.example.com/api/v2.0/ping
 
 deploy_test:
@@ -37,7 +37,7 @@ deploy_test:
     - sleep 3
     - kubectl -n "$NS" create configmap prueba --from-literal=a=b
     - kubectl -n "$NS" get configmap prueba
-    # Esto DEBE fallar; el '!' hace que el job pase si falla
+    # This MUST fail; the '!' makes the job pass if it fails
     - "! kubectl -n kube-system get secrets"
     - kubectl delete ns "$NS"
   after_script:

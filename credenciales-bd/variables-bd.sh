@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
-# Crea o actualiza las credenciales de base de datos de UN proyecto de GitLab, una pareja por ámbito:
+# Creates or updates the database credentials of ONE GitLab project, one pair per scope:
 #
-#   DB_USER / DB_PASSWORD   ámbito review/*      -> entornos de rama (no protegidas)
-#   DB_USER / DB_PASSWORD   ámbito production    -> producción (PROTEGIDAS: solo llegan a ramas protegidas)
+#   DB_USER / DB_PASSWORD   scope review/*      -> branch environments (not protected)
+#   DB_USER / DB_PASSWORD   scope production    -> production (PROTECTED: they only reach protected branches)
 #
-# Uso:
-#   ./variables-bd.sh crear  desarrollo-k8s/mi-app     # pide usuarios y contraseñas; no las muestra
-#   ./variables-bd.sh listar desarrollo-k8s/mi-app     # qué hay definido (nunca enseña los valores)
+# Usage:
+#   ./variables-bd.sh crear  desarrollo-k8s/mi-app     # asks for users and passwords; does not show them
+#   ./variables-bd.sh listar desarrollo-k8s/mi-app     # what is defined (never shows the values)
 #
-# Variables de entorno:
-#   GITLAB_URL     dirección de GitLab, por ejemplo http://gitlab.example.com  (obligatoria)
-#   GITLAB_TOKEN   token con permiso «api» y rol Maintainer: mejor uno del GRUPO desarrollo-k8s, con caducidad corta
-#                  (Grupo, Settings, Access Tokens). Se pregunta, sin mostrarlo, si no está definido.
-#   CA_GITLAB      fichero PEM de la CA, solo si GitLab va por HTTPS con una CA propia
+# Environment variables:
+#   GITLAB_URL     GitLab address, e.g. http://gitlab.example.com  (required)
+#   GITLAB_TOKEN   token with the "api" scope and Maintainer role: preferably one from the desarrollo-k8s GROUP, with a short expiry
+#                  (Group, Settings, Access Tokens). It is asked for, without echoing it, if not defined.
+#   CA_GITLAB      PEM file of the CA, only if GitLab uses HTTPS with its own CA
 #
-# Las variables se crean con «Expand variable reference» DESACTIVADO (raw): una contraseña con «$» no se altera.
-# La contraseña se enmascara (no sale en los registros de los trabajos); el usuario no, porque GitLab solo
-# enmascara valores de 8 o más caracteres y un usuario no es un secreto.
+# Variables are created with "Expand variable reference" DISABLED (raw): a password containing "$" is not altered.
+# The password is masked (it does not appear in job logs); the user is not, because GitLab only
+# masks values of 8 or more characters and a user is not a secret.
 set -euo pipefail
 
 cmd="${1:-}"
@@ -33,13 +33,13 @@ fi
 CURL=(curl -sS --max-time 30 -H "PRIVATE-TOKEN: $GITLAB_TOKEN")
 [ -n "${CA_GITLAB:-}" ] && CURL+=(--cacert "$CA_GITLAB")
 
-# La ruta del proyecto va codificada en la dirección: grupo/proyecto -> grupo%2Fproyecto
+# The project path is encoded in the URL: group/project -> group%2Fproject
 enc="$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$project")"
 API="$GITLAB_URL/api/v4/projects/$enc/variables"
 
-# Una llamada con el cuerpo en un fichero temporal, para que ni la contraseña ni el token pasen por la línea de
-# comandos. Deja el código HTTP en $CODE y la respuesta en el fichero $BODY (sin subshell: las variables se conservan).
-call() { # método, url, [fichero-json]
+# A call with the body in a temporary file, so that neither the password nor the token goes through the command
+# line. Leaves the HTTP code in $CODE and the response in the file $BODY (no subshell: variables are preserved).
+call() { # method, url, [json-file]
   BODY="$(mktemp)"
   if [ -n "${3:-}" ]; then
     CODE="$("${CURL[@]}" -o "$BODY" -w '%{http_code}' -X "$1" -H 'Content-Type: application/json' --data-binary "@$3" "$2")"
@@ -68,8 +68,8 @@ PY
   rm -f "$BODY"
 }
 
-# Crea la variable; si ya existe en ese ámbito, la actualiza
-upsert() { # clave, valor, ámbito, protegida(true|false), enmascarada(true|false)
+# Creates the variable; if it already exists in that scope, updates it
+upsert() { # key, value, scope, protected(true|false), masked(true|false)
   local key="$1" value="$2" scope="$3" prot="$4" mask="$5" tmp verb
   tmp="$(mktemp)"; chmod 600 "$tmp"
   KEY="$key" VALUE="$value" SCOPE="$scope" PROT="$prot" MASK="$mask" python3 - "$tmp" <<'PY'
@@ -99,7 +99,7 @@ PY
   rm -f "$tmp" "$BODY"
 }
 
-pedir() { # prompt, nombre-de-variable, silencioso(0|1)
+pedir() { # prompt, variable-name, silent(0|1)
   local v
   if [ "$3" = "1" ]; then read -r -s -p "$1" v; echo; else read -r -p "$1" v; fi
   [ -n "$v" ] || { echo "ERROR: no puede estar vacío" >&2; exit 2; }
@@ -117,7 +117,7 @@ case "$cmd" in
     pedir "  Usuario: " U_PROD 0
     pedir "  Contraseña: " P_PROD 1
     [ "$P_DEV" != "$P_PROD" ] || { echo "ERROR: la contraseña de desarrollo y la de producción son la misma." >&2; exit 2; }
-    # Se comprueba ANTES de tocar nada, para no dejar el proyecto a medias si una contraseña no se puede enmascarar.
+    # Checked BEFORE touching anything, so the project is not left half-done if a password cannot be masked.
     for P in "$P_DEV" "$P_PROD"; do
       if [ "${#P}" -lt 8 ] || ! printf '%s' "$P" | grep -qE '^[A-Za-z0-9_+=/@:.~-]+$'; then
         echo "ERROR: una contraseña no se puede enmascarar en GitLab. Necesita 8 o más caracteres, en una sola línea," >&2
@@ -126,7 +126,7 @@ case "$cmd" in
       fi
     done
     echo; echo "Guardando en GitLab…"
-    # El usuario no se enmascara: GitLab exige 8 o más caracteres y un usuario no es un secreto.
+    # The user is not masked: GitLab requires 8 or more characters and a user is not a secret.
     upsert DB_USER     "$U_DEV"  'review/*'   false false
     upsert DB_PASSWORD "$P_DEV"  'review/*'   false true
     upsert DB_USER     "$U_PROD" 'production' true  false

@@ -1,14 +1,14 @@
-# Repo de plataforma (p. ej. desarrollo-k8s/plantillas) -> k8s-review.yml
-# En cada proyecto de la app, el .gitlab-ci.yml queda así:
+# Platform repo (e.g. desarrollo-k8s/plantillas) -> k8s-review.yml
+# In each app project, the .gitlab-ci.yml looks like this:
 #   include:
 #     - project: desarrollo-k8s/plantillas
 #       file: k8s-review.yml
 #   variables:
-#     APP_NAME: miapp          # máx. 34 caracteres, minúsculas, sin guiones bajos
+#     APP_NAME: miapp          # max. 34 characters, lowercase, no underscores
 #
-# Variables de grupo (Settings > CI/CD > Variables de desarrollo-k8s):
-#   HARBOR_USER, HARBOR_PASS (masked), HARBOR_CA (tipo File),
-#   DB_USER / DB_PASSWORD con scope "review/*" y otras con scope "production"
+# Group variables (Settings > CI/CD > Variables of desarrollo-k8s):
+#   HARBOR_USER, HARBOR_PASS (masked), HARBOR_CA (File type),
+#   DB_USER / DB_PASSWORD with scope "review/*" and others with scope "production"
 
 stages: [.pre, build, deploy, cleanup]
 
@@ -16,8 +16,8 @@ variables:
   HARBOR: harbor.example.com
   HARBOR_PROJECT: apps
   DEV_DOMAIN: dev.example.com
-  PROD_DOMAIN: example.com     # pasará a apps.example.com cuando exista el comodín *.apps (ver plataforma/dns)
-  ENV_SCHEME: "https"      # el A10 sirve los entornos por HTTPS; solo afecta al enlace «Open» de GitLab
+  PROD_DOMAIN: example.com     # will become apps.example.com once the *.apps wildcard exists (see dns/)
+  ENV_SCHEME: "https"      # the A10 serves the environments over HTTPS; it only affects GitLab's "Open" link
   CHART_VERSION: "0.1.0"
   IMAGE_TAG: $CI_COMMIT_SHORT_SHA
 
@@ -39,7 +39,7 @@ lint_dockerfiles:
   stage: build
   tags: [k8s-build]
   image:
-    name: harbor.example.com/ci/kaniko:v1.23.2-debug   # variante -debug (lleva shell)
+    name: harbor.example.com/ci/kaniko:v1.23.2-debug   # -debug variant (includes a shell)
     entrypoint: [""]
   rules:
     - if: $CI_COMMIT_BRANCH
@@ -53,8 +53,8 @@ build_front:
   extends: .build
   script:
     - |
-      # Las imágenes que salen de main llevan una segunda etiqueta (main-<commit>) sobre la MISMA imagen.
-      # La retención de Harbor la usa para conservar las versiones de producción más tiempo que las de las ramas.
+      # Images coming from main carry a second tag (main-<commit>) on the SAME image.
+      # Harbor retention uses it to keep production versions longer than branch ones.
       EXTRA=""
       if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then
         EXTRA="--destination $HARBOR/$HARBOR_PROJECT/$APP_NAME-front:main-$IMAGE_TAG"
@@ -67,8 +67,8 @@ build_back:
   extends: .build
   script:
     - |
-      # Las imágenes que salen de main llevan una segunda etiqueta (main-<commit>) sobre la MISMA imagen.
-      # La retención de Harbor la usa para conservar las versiones de producción más tiempo que las de las ramas.
+      # Images coming from main carry a second tag (main-<commit>) on the SAME image.
+      # Harbor retention uses it to keep production versions longer than branch ones.
       EXTRA=""
       if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then
         EXTRA="--destination $HARBOR/$HARBOR_PROJECT/$APP_NAME-back:main-$IMAGE_TAG"
@@ -119,9 +119,9 @@ build_back:
     - kubectl -n "$NS" create rolebinding ci-deploy --clusterrole=ci-deploy-app --serviceaccount=ci-deploy:ci-deploy-job || true
     - kubectl -n "$NS" create rolebinding kdev-reader --clusterrole=kdev-reader --serviceaccount=kdev:kdev || true
     - |
-      # Credenciales de base de datos: las define Sistemas en cada proyecto de GitLab, con ámbito
-      # review/* (ramas) y production. Si la aplicación las declara y no llegan, se para aquí con un
-      # mensaje claro, en lugar de desplegar con un Secret vacío y un error de conexión difícil de entender.
+      # Database credentials: sysadmins define them in each GitLab project, with scope
+      # review/* (branches) and production. If the application declares them and they do not arrive, it stops here with a
+      # clear message, instead of deploying with an empty Secret and a hard-to-understand connection error.
       echo "Valores aplicados: deploy/values.yaml ${VALUES_EXTRA:-(ningún fichero propio de este entorno)}"
       VFILES="deploy/values.yaml $(echo "$VALUES_EXTRA" | sed 's/-f //g')"
       MISSING=""
@@ -167,7 +167,7 @@ stop_review:
   tags: [k8s-deploy]
   image: harbor.example.com/ci/helm-kubectl:1.36.0
   variables:
-    GIT_STRATEGY: none      # la rama puede estar ya borrada
+    GIT_STRATEGY: none      # the branch may already be deleted
   rules:
     - if: $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
       when: manual
@@ -184,7 +184,7 @@ deploy_prod:
   stage: deploy
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      when: manual          # quitar 'when' para despliegue automático al mergear
+      when: manual          # remove 'when' for automatic deployment on merge
   environment:
     name: production
     url: $ENV_SCHEME://$APP_NAME.$PROD_DOMAIN

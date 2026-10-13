@@ -1,9 +1,9 @@
-# Runner de despliegue a PRODUCCIÓN. En GitLab se crea como runner de grupo con:
+# PRODUCTION deployment runner. In GitLab it is created as a group runner with:
 #   - tag: k8s-deploy-prod
-#   - «Protected» MARCADO (solo ejecuta trabajos de ramas y etiquetas protegidas)
-#   - «Run untagged jobs» desmarcado
+#   - "Protected" TICKED (it only runs jobs from protected branches and tags)
+#   - "Run untagged jobs" unticked
 #
-# helm install runner-deploy-prod ./gitlab-runner-0.71.0.tgz -n ci-deploy-prod -f plataforma/runners/32-runner-deploy-prod-values.yaml
+# helm install runner-deploy-prod ./gitlab-runner-0.71.0.tgz -n ci-deploy-prod -f propuesta-proteccion/32-runner-deploy-prod-values.yaml
 #   kubectl -n ci-deploy-prod create secret generic runner-token \
 #     --from-literal=runner-token='glrt-ZZZZ' --from-literal=runner-registration-token=''
 image:
@@ -12,8 +12,8 @@ image:
   tag: alpine-v17.6.0
 imagePullPolicy: IfNotPresent
 
-gitlabUrl: http://<GITLAB_HOST>/     # CAMBIAR
-concurrent: 1                        # un despliegue a producción a la vez
+gitlabUrl: http://<GITLAB_HOST>/     # CHANGE
+concurrent: 1                        # one production deployment at a time
 checkInterval: 5
 rbac:
   create: true

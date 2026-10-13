@@ -30,8 +30,8 @@ stored in the repository.
 
 ## Language
 
-All documentation is in English. The scripts (their comments, subcommands and output messages) are
-still in Spanish; the READMEs include short glossaries where it matters.
+Documentation and code comments are in English. The scripts' subcommands, output messages and
+identifiers (e.g. `aplicar`, `probar`, `estado`) are still in Spanish; the READMEs include short glossaries where it matters.
 
 ## License
 

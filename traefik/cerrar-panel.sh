@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# Ata la ruta del panel de Traefik (IngressRoute «traefik-dashboard») a su nombre.
+# Ties the Traefik dashboard route (IngressRoute "traefik-dashboard") to its name.
 #
-# Hoy su regla es PathPrefix(`/api`) || PathPrefix(`/dashboard`), SIN Host: responde bajo CUALQUIER nombre.
-# Eso (1) le gana por prioridad a las aplicaciones con rutas cortas (le pasó a KubeDev) y (2) puede dejar la API
-# interna de Traefik, que lista las rutas del clúster, accesible desde cualquier nombre que llegue al A10.
+# Today its rule is PathPrefix(`/api`) || PathPrefix(`/dashboard`), WITHOUT Host: it answers under ANY name.
+# That (1) beats applications with short routes on priority (it happened to KubeDev) and (2) can leave Traefik's internal
+# API, which lists the cluster's routes, reachable from any name that reaches the A10.
 #
-# Uso:
-#   export TRAEFIK=<IP de un nodo>                       # obligatoria: las pruebas van contra Traefik directamente
-#   bash cerrar-panel.sh diagnosticar                    # no cambia nada: enseña la ruta y si está expuesta
-#   bash cerrar-panel.sh cerrar traefik.example.com     # añade Host(...) a la regla, comprueba y revierte si falla
-#   bash cerrar-panel.sh revertir                        # vuelve a la regla original
+# Usage:
+#   export TRAEFIK=<IP of a node>                       # required: the tests go directly against Traefik
+#   bash cerrar-panel.sh diagnosticar                    # changes nothing: shows the route and whether it is exposed
+#   bash cerrar-panel.sh cerrar traefik.example.com     # adds Host(...) to the rule, checks, and reverts on failure
+#   bash cerrar-panel.sh revertir                        # goes back to the original rule
 #
-# Variables opcionales: NS (traefik)  NAME (traefik-dashboard)  PORT_HTTP (80)  PORT_HTTPS (443)
-#                       KDEV_HOST (kdev.example.com)  ESPERA (segundos que se espera a que Traefik recargue; 4)
-# Necesita kubectl, curl y python3. El script NO reinicia Traefik.
+# Optional variables: NS (traefik)  NAME (traefik-dashboard)  PORT_HTTP (80)  PORT_HTTPS (443)
+#                       KDEV_HOST (kdev.example.com)  ESPERA (seconds to wait for Traefik to reload; 4)
+# Needs kubectl, curl and python3. The script does NOT restart Traefik.
 set -uo pipefail
 
 NS="${NS:-traefik}"; NAME="${NAME:-traefik-dashboard}"
@@ -27,10 +27,10 @@ cmd="${1:-}"
 for b in kubectl curl python3; do command -v "$b" >/dev/null || { echo "ERROR: falta $b" >&2; exit 2; }; done
 : "${TRAEFIK:?Falta TRAEFIK (IP de un nodo del clúster)}"
 
-# ---- utilidades ----
+# ---- utilities ----
 ruta_json() { kubectl -n "$NS" get ingressroute "$NAME" -o json; }
 
-regla_actual() { # imprime la regla de la primera ruta, y falla si no hay exactamente una
+regla_actual() { # prints the rule of the first route, and fails if there is not exactly one
   ruta_json | python3 -c '
 import sys, json
 o = json.load(sys.stdin)
@@ -42,7 +42,7 @@ print(r[0]["match"])'
 
 entrypoints() { ruta_json | python3 -c 'import sys,json; print(",".join(json.load(sys.stdin)["spec"].get("entryPoints", [])) or "(todos)")'; }
 
-codigo() { # host ruta  -> código HTTP probando http y, si no responde, https
+codigo() { # host path  -> HTTP code trying http and, if it does not answer, https
   local host="$1" path="$2" c
   c="$(curl -s -o /dev/null -w '%{http_code}' --max-time 6 -H "Host: $host" "http://$TRAEFIK:$PORT_HTTP$path" 2>/dev/null || true)"
   if [ -z "$c" ] || [ "$c" = "000" ]; then
@@ -51,14 +51,14 @@ codigo() { # host ruta  -> código HTTP probando http y, si no responde, https
   echo "${c:-000}"
 }
 
-cuerpo_es_api_traefik() { # host -> 0 si /api/rawdata devuelve el JSON interno de Traefik
+cuerpo_es_api_traefik() { # host -> 0 if /api/rawdata returns Traefik's internal JSON
   local b
   b="$(curl -s --max-time 6 -H "Host: $1" "http://$TRAEFIK:$PORT_HTTP/api/rawdata" 2>/dev/null || true)"
   [ -n "$b" ] || b="$(curl -sk --max-time 6 -H "Host: $1" "https://$TRAEFIK:$PORT_HTTPS/api/rawdata" 2>/dev/null || true)"
   printf '%s' "$b" | grep -q '"routers"'
 }
 
-# 401 y 403 cuentan: el panel responde, solo que pide credenciales (por ejemplo, con un middleware de autenticación)
+# 401 and 403 count: the dashboard answers, it just asks for credentials (for example, with an authentication middleware)
 abre() { case "$1" in 200|301|302|303|307|308|401|403) return 0 ;; *) return 1 ;; esac; }
 
 nombre_inventado="nombre-inventado-$RANDOM.prueba.example.com"
@@ -78,7 +78,7 @@ estado() {
   return 0
 }
 
-patch_regla() { # nueva regla
+patch_regla() { # new rule
   local patch
   patch="$(NUEVA="$1" python3 -c 'import os, json; print(json.dumps([{"op": "replace", "path": "/spec/routes/0/match", "value": os.environ["NUEVA"]}]))')"
   kubectl -n "$NS" patch ingressroute "$NAME" --type=json -p "$patch" >/dev/null

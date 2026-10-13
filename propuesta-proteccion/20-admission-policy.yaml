@@ -1,11 +1,11 @@
-# Barreras de seguridad de los runners de despliegue. Cada uno solo puede ESCRIBIR en su tipo de entorno:
-#   - runner de ramas      (ci-deploy:ci-deploy-job)            -> namespaces app-<app>-review-<slug>
-#   - runner de producción (ci-deploy-prod:ci-deploy-prod-job)  -> namespaces app-<app>-prod
-# Un namespace se identifica por su NOMBRE y por su ETIQUETA kubeops/env, y las dos tienen que coincidir.
-# El de ramas jamás puede tocar producción, aunque alguien escriba su propio trabajo con ese runner.
-# ESTADO INICIAL: modo aviso (Warn). No bloquea nada; el cliente ve «Warning: Validation failed for
-# ValidatingAdmissionPolicy ...» cuando la política habría bloqueado. Se activa con proteccion.sh enforce.
-# Alcance: cada política solo evalúa las peticiones de su ServiceAccount, así que no afecta al resto del clúster.
+# Security barriers for the deployment runners. Each one can only WRITE in its own type of environment:
+#   - branch runner          (ci-deploy:ci-deploy-job)            -> namespaces app-<app>-review-<slug>
+#   - production runner      (ci-deploy-prod:ci-deploy-prod-job)  -> namespaces app-<app>-prod
+# A namespace is identified by its NAME and its kubeops/env LABEL, and both must match.
+# The branch runner can never touch production, even if someone writes their own job with that runner.
+# INITIAL STATE: warning mode (Warn). It blocks nothing; the client sees "Warning: Validation failed for
+# ValidatingAdmissionPolicy ..." when the policy would have blocked. It is activated with proteccion.sh enforce.
+# Scope: each policy only evaluates requests from its ServiceAccount, so it does not affect the rest of the cluster.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
@@ -45,7 +45,7 @@ metadata:
   name: ci-deploy-ramas
 spec:
   policyName: ci-deploy-ramas
-  validationActions: [Warn, Audit]   # MODO AVISO. «proteccion.sh enforce» lo cambia a [Deny] cuando la batería sale limpia
+  validationActions: [Warn, Audit]   # WARNING MODE. "proteccion.sh enforce" changes it to [Deny] when the battery comes out clean
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
@@ -86,4 +86,4 @@ metadata:
   name: ci-deploy-produccion
 spec:
   policyName: ci-deploy-produccion
-  validationActions: [Warn, Audit]   # MODO AVISO. «proteccion.sh enforce» lo cambia a [Deny] cuando la batería sale limpia
+  validationActions: [Warn, Audit]   # WARNING MODE. "proteccion.sh enforce" changes it to [Deny] when the battery comes out clean

@@ -1,5 +1,5 @@
-# Namespaces donde viven los runners y sus pods de job.
-# Pod Security: baseline obligatorio (Kaniko corre como root pero sin privilegios).
+# Namespaces where the runners and their job pods live.
+# Pod Security: baseline enforced (Kaniko runs as root but without privileges).
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -18,7 +18,7 @@ metadata:
     pod-security.kubernetes.io/warn: restricted
     kubeops/role: ci
 ---
-# SA de los pods de BUILD: sin acceso a la API de Kubernetes.
+# SA of the BUILD pods: no access to the Kubernetes API.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -26,15 +26,15 @@ metadata:
   namespace: ci-build
 automountServiceAccountToken: false
 ---
-# SA de los pods de DEPLOY: sus permisos se definen en 10-rbac.yaml
+# SA of the DEPLOY pods: its permissions are defined in 10-rbac.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: ci-deploy-job
   namespace: ci-deploy
 ---
-# Runner de despliegue a PRODUCCIÓN: separado del de ramas y marcado como «protegido» en GitLab,
-# de modo que solo ejecuta trabajos de ramas y etiquetas protegidas (main).
+# PRODUCTION deployment runner: separate from the branch one and marked as "protected" in GitLab,
+# so that it only runs jobs from protected branches and tags (main).
 apiVersion: v1
 kind: Namespace
 metadata:

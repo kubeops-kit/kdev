@@ -1,9 +1,9 @@
-# Diseño: el SA de deploy NO tiene lectura de secretos a nivel de clúster.
-# - A nivel de clúster solo puede: gestionar namespaces, y CREAR (no modificar/borrar)
-#   quotas, limitranges y rolebindings.
-# - Dentro de cada namespace app-* recibe el rol ci-deploy-app mediante un RoleBinding
-#   que crea el propio pipeline.
-# - La política de admisión (20-admission-policy.yaml) limita TODAS sus escrituras a app-*.
+# Design: the deploy SA has NO cluster-wide secret read access.
+# - At cluster level it can only: manage namespaces, and CREATE (not modify/delete)
+#   quotas, limitranges and rolebindings.
+# - Inside each app-* namespace it gets the ci-deploy-app role through a RoleBinding
+#   created by the pipeline itself.
+# - The admission policy (20-admission-policy.yaml) limits ALL its writes to app-*.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -18,7 +18,7 @@ rules:
   - apiGroups: [rbac.authorization.k8s.io]
     resources: [rolebindings]
     verbs: [create]
-  # Permite crear RoleBindings que apunten SOLO a ci-deploy-app
+  # Allows creating RoleBindings that point ONLY to ci-deploy-app
   - apiGroups: [rbac.authorization.k8s.io]
     resources: [clusterroles]
     verbs: [bind]
@@ -37,8 +37,8 @@ subjects:
     name: ci-deploy-job
     namespace: ci-deploy
 ---
-# Permisos DENTRO de un namespace app-* (se usa con RoleBinding, nunca ClusterRoleBinding).
-# Sin quotas, limitranges ni rolebindings: no puede quitarse sus propios límites.
+# Permissions INSIDE an app-* namespace (used with a RoleBinding, never a ClusterRoleBinding).
+# No quotas, limitranges or rolebindings: it cannot remove its own limits.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -63,8 +63,8 @@ rules:
     resources: [jobs, cronjobs]
     verbs: [get, list, watch, create, update, patch, delete]
 ---
-# Permisos del SA de PRODUCCIÓN: los mínimos para crear y actualizar. No puede borrar namespaces
-# (el borrado de un entorno de producción se hace a mano, con un administrador).
+# Permissions of the PRODUCTION SA: the minimum to create and update. It cannot delete namespaces
+# (deleting a production environment is done by hand, with an administrator).
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:

@@ -1,14 +1,14 @@
 # helm install runner-build gitlab/gitlab-runner -n ci-build -f 30-runner-build-values.yaml --version <chart 17.6.x>
-# Antes: secret con el token del runner de grupo (tag k8s-build):
+# First: a secret with the group runner token (tag k8s-build):
 #   kubectl -n ci-build create secret generic runner-token \
 #     --from-literal=runner-token='glrt-XXXX' --from-literal=runner-registration-token=''
 image:
   registry: harbor.example.com
   image: ci/gitlab-runner
-  tag: alpine-v17.6.0          # comprobar que el tag existe en tu Harbor
+  tag: alpine-v17.6.0          # check that the tag exists in your Harbor
 imagePullPolicy: IfNotPresent
 
-gitlabUrl: http://<GITLAB_HOST>/     # CAMBIAR
+gitlabUrl: http://<GITLAB_HOST>/     # CHANGE
 concurrent: 4
 checkInterval: 5
 rbac:

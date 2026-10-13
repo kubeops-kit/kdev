@@ -7,7 +7,7 @@ image:
   tag: alpine-v17.6.0
 imagePullPolicy: IfNotPresent
 
-gitlabUrl: http://<GITLAB_HOST>/     # CAMBIAR
+gitlabUrl: http://<GITLAB_HOST>/     # CHANGE
 concurrent: 2
 checkInterval: 5
 rbac:

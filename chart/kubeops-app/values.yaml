@@ -1,17 +1,17 @@
-# Valores por defecto de kubeops-app.
-# Los proyectos de los devs sobrescriben solo lo que necesiten en deploy/values.yaml.
-# Los marcados "pipeline" los inyecta ci-template.yml con --set.
+# Default values of kubeops-app.
+# Developers' projects override only what they need in deploy/values.yaml.
+# Those marked "pipeline" are injected by ci-template.yml with --set.
 
-app: ""               # pipeline: nombre de la app (APP_NAME)
-replicaCount: 1       # pipeline: en producción se sube con --set
+app: ""               # pipeline: app name (APP_NAME)
+replicaCount: 1       # pipeline: raised with --set in production
 
 image:
   registry: harbor.example.com/apps   # pipeline
-  tag: ""                                    # pipeline: SHA del commit
+  tag: ""                                    # pipeline: commit SHA
 
 ingress:
   host: ""            # pipeline
-  className: ""       # vacío = clase por defecto (Traefik)
+  className: ""       # empty = default class (Traefik)
 
 frontend:
   port: 80
@@ -23,10 +23,10 @@ frontend:
 backend:
   port: 3000
   healthPath: /api/health
-  apiPath: /api       # ruta del Ingress que va al backend (no se recorta)
-  secretName: app-db  # Secret que crea el pipeline con DB_USER / DB_PASSWORD
-  env: {}             # variables NO sensibles: { DB_HOST: bd-dev, DB_PORT: "5432" }
-  secretEnv: []       # nombres de claves de ese Secret: [DB_USER, DB_PASSWORD]
+  apiPath: /api       # Ingress path that goes to the backend (not stripped)
+  secretName: app-db  # Secret the pipeline creates with DB_USER / DB_PASSWORD
+  env: {}             # NON-sensitive variables: { DB_HOST: bd-dev, DB_PORT: "5432" }
+  secretEnv: []       # key names of that Secret: [DB_USER, DB_PASSWORD]
   resources:
     requests: { cpu: 100m, memory: 128Mi }
     limits: { cpu: 500m, memory: 512Mi }

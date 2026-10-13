@@ -1,4 +1,4 @@
-# Añadir este job al .gitlab-ci.yml del proyecto pipeline-prueba (stage: test)
+# Add this job to the .gitlab-ci.yml of the pipeline-prueba project (stage: test)
 kaniko_test:
   stage: test
   tags: [k8s-build]
