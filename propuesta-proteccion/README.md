@@ -85,4 +85,4 @@ GitLab.
 | `ci-template.yml` | The current template with only two changes: `deploy_prod` uses the protected runner and its RoleBinding |
 | `chart/kubeops-app/` | Copy of the chart for the simulated deployment |
 | `probar-politicas-cel.py` | Evaluates the CEL expressions without a cluster (`pip install cel-python pyyaml`) |
-| `PROTEGER-PRODUCCION.md` | The GitLab side: `main` branch, protected variables, template, roles  |
+| `PROTEGER-PRODUCCION.md`, `PROTEGER-MAIN.md` | The GitLab side: `main` branch, protected variables, template, roles |
