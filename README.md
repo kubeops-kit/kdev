@@ -26,3 +26,7 @@ Cada carpeta tiene su propio `LEEME.md` con los pasos. Los valores específicos 
 entorno (URLs de GitLab/Harbor, dominios, CIDRs) hay que adaptarlos a tu clúster.
 Los tokens se pasan por variables de entorno (`GITLAB_TOKEN`, `HARBOR_PASS`); no se
 guardan en el repositorio.
+
+## Licencia
+
+Apache License 2.0. Ver [LICENSE](LICENSE).
