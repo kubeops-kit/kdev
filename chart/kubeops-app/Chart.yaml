@@ -1,6 +1,6 @@
 apiVersion: v2
 name: kubeops-app
-description: Aplicación web genérica (frontend React/nginx + backend Node) para entornos por rama
+description: Generic web application (React/nginx frontend + Node backend) for per-branch environments
 type: application
 version: 0.1.0
 appVersion: "1.0"

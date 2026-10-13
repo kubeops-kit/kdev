@@ -24,13 +24,13 @@ spec:
         request.resource.resource == 'namespaces'
         ? request.name.startsWith('app-')
         : request.namespace.startsWith('app-')
-      message: "ci-deploy solo puede escribir en namespaces con prefijo app-"
+      message: "ci-deploy can only write to namespaces with the app- prefix"
     - expression: >-
         request.resource.resource != 'namespaces' || request.operation == 'DELETE' ||
         (has(object.metadata.labels) &&
          'pod-security.kubernetes.io/enforce' in object.metadata.labels &&
          object.metadata.labels['pod-security.kubernetes.io/enforce'] in ['baseline', 'restricted'])
-      message: "Los namespaces deben llevar pod-security.kubernetes.io/enforce=baseline|restricted"
+      message: "Namespaces must carry pod-security.kubernetes.io/enforce=baseline|restricted"
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding

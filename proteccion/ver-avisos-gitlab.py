@@ -76,18 +76,18 @@ class Cliente:
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--url", default=os.environ.get("GITLAB_URL"))
-    ap.add_argument("--grupo", action="append", default=[], help="id de grupo (repetible)")
-    ap.add_argument("--proyecto", action="append", default=[], help="id de proyecto (repetible)")
-    ap.add_argument("--desde", help="época o fecha ISO; por defecto, cuando se aplicaron las políticas")
+    ap.add_argument("--grupo", action="append", default=[], help="group id (repeatable)")
+    ap.add_argument("--proyecto", action="append", default=[], help="project id (repeatable)")
+    ap.add_argument("--desde", help="epoch or ISO date; by default, when the policies were applied")
     ap.add_argument("--estado", default=os.environ.get("PROTECCION_ESTADO") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "estado"))
-    ap.add_argument("--ca", help="certificado de la CA si GitLab va por HTTPS")
+    ap.add_argument("--ca", help="CA certificate if GitLab uses HTTPS")
     a = ap.parse_args()
 
     token = os.environ.get("GITLAB_TOKEN")
     if not a.url or not token:
-        sys.exit("Define GITLAB_URL y GITLAB_TOKEN (o --url).")
+        sys.exit("Set GITLAB_URL and GITLAB_TOKEN (or --url).")
     if not a.grupo and not a.proyecto:
-        sys.exit("Indica --grupo o --proyecto.")
+        sys.exit("Give --grupo or --proyecto.")
 
     desde = None
     if a.desde:
@@ -101,7 +101,7 @@ def main():
         except OSError:
             pass
         if desde is None:
-            sys.exit("No sé desde cuándo mirar: ejecuta proteccion.sh aplicar o pasa --desde.")
+            sys.exit("Cannot tell from when to look: run proteccion.sh aplicar or pass --desde.")
 
     c = Cliente(a.url, token, a.ca)
     proyectos = {}
@@ -127,11 +127,11 @@ def main():
                 detalle.append((nombre, job, lineas))
             if PATRON_RBAC in log:
                 con_rbac += 1
-                detalle.append((nombre, job, ["(error de permisos RBAC del runner de despliegue)"]))
+                detalle.append((nombre, job, ["(RBAC permission error of the deployment runner)"]))
 
-    print("Proyectos revisados: %d · jobs de despliegue desde %s: %d" % (
+    print("Projects reviewed: %d · deployment jobs since %s: %d" % (
         len(proyectos), datetime.datetime.fromtimestamp(desde).strftime("%F %T"), total))
-    print("Con avisos de política: %d · con errores de permisos (RBAC): %d" % (con_aviso, con_rbac))
+    print("With policy warnings: %d · with permission (RBAC) errors: %d" % (con_aviso, con_rbac))
     for nombre, job, lineas in detalle:
         print("\n- %s · job #%s %s (%s) · %s" % (nombre, job["id"], job["name"], job["status"], job.get("web_url", "")))
         for l in sorted(set(lineas))[:5]:
@@ -142,9 +142,9 @@ def main():
         f.write("TS=%d\nDESDE=%d\nJOBS=%d\nCON_AVISO=%d\nFORBIDDEN=%d\nPROYECTOS=%d\n" % (
             int(datetime.datetime.now().timestamp()), desde, total, con_aviso, con_rbac, len(proyectos)))
     if con_aviso:
-        print("\nHAY AVISOS: no pases a enforce hasta entender cada uno.")
+        print("\nTHERE ARE WARNINGS: do not switch to enforce until you understand each one.")
         sys.exit(1)
-    print("\nSin avisos en el tráfico real revisado.")
+    print("\nNo warnings in the real traffic reviewed.")
 
 
 if __name__ == "__main__":

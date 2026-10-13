@@ -195,10 +195,10 @@ By default it tests `kdev.example.com` and **a made-up environment name**
 | Result | What it means |
 |---|---|
 | **404** on the made-up name | **All good up to the cluster**: wildcard DNS, the A10 and Traefik work. The 404 is Traefik's, which has no environment with that name |
-| `FALLA en el DNS` (fails in DNS) | The name does not resolve: the record is missing |
-| `resuelve a X, no a la IP del balanceador` (resolves to X, not to the load balancer's IP) | The record points to another IP |
-| `FALLA en el balanceador` (fails at the load balancer) | It resolves, but nothing responds: the A10 virtual service is missing at that IP and port, or the firewall |
-| `FALLA el certificado` (certificate fails) | The certificate does not cover the name, or the machine does not recognise the CA |
+| `FAILS at DNS` | The name does not resolve: the record is missing |
+| `FAILS: resolves to X, not to the load balancer IP` | The record points to another IP |
+| `FAILS at the load balancer` | It resolves, but nothing responds: the A10 virtual service is missing at that IP and port, or the firewall |
+| `certificate FAILS` | The certificate does not cover the name, or the machine does not recognise the CA |
 | 502 | It reaches the cluster, but the application is not ready |
 | 200 or 302 on a real name | It opens |
 
@@ -258,7 +258,7 @@ The recommendation is still **B**: the only cost is one certificate, once.
 
 1. **The network team** applies the request.
 2. **Validate the name** before touching anything on our side: `bash dns/comprobar.sh` (it tests a made-up name under
-   `apps.`: it must give a **Traefik 404**). If it gives `FALLA`, do not go on.
+   `apps.`: it must give a **Traefik 404**). If it reports `FAILS`, do not go on.
 3. **Change the template** (`desarrollo-k8s/plantillas`, `k8s-review.yml`): `PROD_DOMAIN: apps.example.com`.
 4. **New pipeline on `main`** of `hola-k8s` (a new commit or *Run pipeline*; *Retry* does not work) and press `deploy_prod`.
    Helm changes the Ingress host in the same environment, without recreating it.

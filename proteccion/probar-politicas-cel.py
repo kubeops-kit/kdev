@@ -23,11 +23,11 @@ def decide(policy_name, user, op, resource, name=None, namespace="", obj=None, n
                        "name": name or "", "namespace": namespace},
            "object": obj or {"metadata": {}}, "namespaceObject": ns_obj or {"metadata": {}}}
     if not run(spec['matchConditions'][0]['expression'], act):
-        return "NO APLICA"          # the policy does not look at this user
+        return "N/A"          # the policy does not look at this user
     for v in spec['validations']:
         if not run(v['expression'], act):
-            return "DENEGADO"
-    return "PERMITIDO"
+            return "DENIED"
+    return "ALLOWED"
 
 def ns(env_label, psa="baseline", extra=None):
     labels = {}
@@ -39,44 +39,44 @@ def ns(env_label, psa="baseline", extra=None):
 R, P = "ci-deploy-ramas", "ci-deploy-produccion"
 cases = [
  # (description, policy, user, op, resource, name, namespace, object, ns_obj, expected)
- ("RAMAS crea ns de rama correcto",                         R, REVIEW_SA, "CREATE", "namespaces", "app-hola-k8s-review-feature-x-a1b2c3", "", ns("review"), None, "PERMITIDO"),
- ("RAMAS crea ns de rama sin etiqueta env",                 R, REVIEW_SA, "CREATE", "namespaces", "app-hola-review-x-a1b2c3", "", ns(None), None, "DENEGADO"),
- ("RAMAS crea ns de rama con env=prod (suplantación)",      R, REVIEW_SA, "CREATE", "namespaces", "app-hola-review-x-a1b2c3", "", ns("prod"), None, "DENEGADO"),
- ("RAMAS crea el ns de producción de una app",              R, REVIEW_SA, "CREATE", "namespaces", "app-hola-k8s-prod", "", ns("prod"), None, "DENEGADO"),
- ("RAMAS crea ns de producción con etiqueta review",        R, REVIEW_SA, "CREATE", "namespaces", "app-hola-k8s-prod", "", ns("review"), None, "DENEGADO"),
- ("RAMAS crea ns sin Pod Security",                         R, REVIEW_SA, "CREATE", "namespaces", "app-hola-review-x-a1b2c3", "", ns("review", psa=None), None, "DENEGADO"),
- ("RAMAS crea ns con Pod Security privileged",              R, REVIEW_SA, "CREATE", "namespaces", "app-hola-review-x-a1b2c3", "", ns("review", psa="privileged"), None, "DENEGADO"),
- ("RAMAS crea ns fuera de app-*",                           R, REVIEW_SA, "CREATE", "namespaces", "kube-system", "", ns("review"), None, "DENEGADO"),
- ("RAMAS borra ns de rama",                                 R, REVIEW_SA, "DELETE", "namespaces", "app-hola-k8s-review-feature-x-a1b2c3", "", None, None, "PERMITIDO"),
- ("RAMAS BORRA EL NS DE PRODUCCIÓN",                        R, REVIEW_SA, "DELETE", "namespaces", "app-hola-k8s-prod", "", None, None, "DENEGADO"),
- ("RAMAS borra ns de otra app con nombre tramposo (…review-tool-prod)", R, REVIEW_SA, "DELETE", "namespaces", "app-my-review-tool-prod", "", None, None, "DENEGADO"),
- ("RAMAS: app llamada x-review-aaaaaa, su prod no es de rama", R, REVIEW_SA, "DELETE", "namespaces", "app-x-review-aaaaaa-prod", "", None, None, "DENEGADO"),
- ("RAMAS crea deployment en ns de rama",                    R, REVIEW_SA, "CREATE", "deployments", "web", "app-hola-k8s-review-feature-x-a1b2c3", None, ns("review"), "PERMITIDO"),
- ("RAMAS MODIFICA un deployment de PRODUCCIÓN",             R, REVIEW_SA, "UPDATE", "deployments", "web", "app-hola-k8s-prod", None, ns("prod"), "DENEGADO"),
- ("RAMAS borra un secreto de PRODUCCIÓN",                   R, REVIEW_SA, "DELETE", "secrets", "app-db", "app-hola-k8s-prod", None, ns("prod"), "DENEGADO"),
- ("RAMAS crea rolebinding en PRODUCCIÓN",                   R, REVIEW_SA, "CREATE", "rolebindings", "x", "app-hola-k8s-prod", None, ns("prod"), "DENEGADO"),
- ("RAMAS: ns con nombre de rama pero etiqueta prod (por si lo etiquetan mal)", R, REVIEW_SA, "UPDATE", "configmaps", "c", "app-a-review-b-a1b2c3", None, ns("prod"), "DENEGADO"),
- ("RAMAS escribe un recurso global (clusterrole)",          R, REVIEW_SA, "CREATE", "clusterroles", "x", "", None, None, "DENEGADO"),
- ("RAMAS escribe en kube-system",                           R, REVIEW_SA, "CREATE", "configmaps", "x", "kube-system", None, ns(None, psa=None), "DENEGADO"),
- ("RAMAS: la política NO mira al runner de producción",     R, PROD_SA, "CREATE", "namespaces", "app-x-prod", "", ns("prod"), None, "NO APLICA"),
+ ("BRANCH creates a valid branch ns",                         R, REVIEW_SA, "CREATE", "namespaces", "app-hola-k8s-review-feature-x-a1b2c3", "", ns("review"), None, "ALLOWED"),
+ ("BRANCH creates a branch ns without the env label",                 R, REVIEW_SA, "CREATE", "namespaces", "app-hola-review-x-a1b2c3", "", ns(None), None, "DENIED"),
+ ("BRANCH creates a branch ns with env=prod (impersonation)",      R, REVIEW_SA, "CREATE", "namespaces", "app-hola-review-x-a1b2c3", "", ns("prod"), None, "DENIED"),
+ ("BRANCH creates an app's production ns",              R, REVIEW_SA, "CREATE", "namespaces", "app-hola-k8s-prod", "", ns("prod"), None, "DENIED"),
+ ("BRANCH creates a production ns with the review label",        R, REVIEW_SA, "CREATE", "namespaces", "app-hola-k8s-prod", "", ns("review"), None, "DENIED"),
+ ("BRANCH creates an ns without Pod Security",                         R, REVIEW_SA, "CREATE", "namespaces", "app-hola-review-x-a1b2c3", "", ns("review", psa=None), None, "DENIED"),
+ ("BRANCH creates an ns with Pod Security privileged",              R, REVIEW_SA, "CREATE", "namespaces", "app-hola-review-x-a1b2c3", "", ns("review", psa="privileged"), None, "DENIED"),
+ ("BRANCH creates an ns outside app-*",                           R, REVIEW_SA, "CREATE", "namespaces", "kube-system", "", ns("review"), None, "DENIED"),
+ ("BRANCH deletes a branch ns",                                 R, REVIEW_SA, "DELETE", "namespaces", "app-hola-k8s-review-feature-x-a1b2c3", "", None, None, "ALLOWED"),
+ ("BRANCH DELETES THE PRODUCTION NS",                        R, REVIEW_SA, "DELETE", "namespaces", "app-hola-k8s-prod", "", None, None, "DENIED"),
+ ("BRANCH deletes another app's ns with a tricky name (…review-tool-prod)", R, REVIEW_SA, "DELETE", "namespaces", "app-my-review-tool-prod", "", None, None, "DENIED"),
+ ("BRANCH: app called x-review-aaaaaa, its prod is not a branch ns", R, REVIEW_SA, "DELETE", "namespaces", "app-x-review-aaaaaa-prod", "", None, None, "DENIED"),
+ ("BRANCH creates a deployment in a branch ns",                    R, REVIEW_SA, "CREATE", "deployments", "web", "app-hola-k8s-review-feature-x-a1b2c3", None, ns("review"), "ALLOWED"),
+ ("BRANCH MODIFIES a PRODUCTION deployment",             R, REVIEW_SA, "UPDATE", "deployments", "web", "app-hola-k8s-prod", None, ns("prod"), "DENIED"),
+ ("BRANCH deletes a PRODUCTION secret",                   R, REVIEW_SA, "DELETE", "secrets", "app-db", "app-hola-k8s-prod", None, ns("prod"), "DENIED"),
+ ("BRANCH creates a rolebinding in PRODUCTION",                   R, REVIEW_SA, "CREATE", "rolebindings", "x", "app-hola-k8s-prod", None, ns("prod"), "DENIED"),
+ ("BRANCH: ns with a branch name but the prod label (in case it is mislabelled)", R, REVIEW_SA, "UPDATE", "configmaps", "c", "app-a-review-b-a1b2c3", None, ns("prod"), "DENIED"),
+ ("BRANCH writes a global resource (clusterrole)",          R, REVIEW_SA, "CREATE", "clusterroles", "x", "", None, None, "DENIED"),
+ ("BRANCH writes to kube-system",                           R, REVIEW_SA, "CREATE", "configmaps", "x", "kube-system", None, ns(None, psa=None), "DENIED"),
+ ("BRANCH: the policy does NOT look at the production runner",     R, PROD_SA, "CREATE", "namespaces", "app-x-prod", "", ns("prod"), None, "N/A"),
 
- ("PROD crea ns de producción correcto",                    P, PROD_SA, "CREATE", "namespaces", "app-hola-k8s-prod", "", ns("prod"), None, "PERMITIDO"),
- ("PROD crea ns de rama",                                   P, PROD_SA, "CREATE", "namespaces", "app-hola-review-x-a1b2c3", "", ns("review"), None, "DENEGADO"),
- ("PROD crea ns de producción con etiqueta review",         P, PROD_SA, "CREATE", "namespaces", "app-hola-k8s-prod", "", ns("review"), None, "DENEGADO"),
- ("PROD crea ns sin Pod Security",                          P, PROD_SA, "CREATE", "namespaces", "app-hola-k8s-prod", "", ns("prod", psa=None), None, "DENEGADO"),
- ("PROD crea ns privileged",                                P, PROD_SA, "CREATE", "namespaces", "app-hola-k8s-prod", "", ns("prod", psa="privileged"), None, "DENEGADO"),
- ("PROD crea deployment en producción",                     P, PROD_SA, "CREATE", "deployments", "web", "app-hola-k8s-prod", None, ns("prod"), "PERMITIDO"),
- ("PROD actualiza secreto en producción",                   P, PROD_SA, "UPDATE", "secrets", "app-db", "app-hola-k8s-prod", None, ns("prod"), "PERMITIDO"),
- ("PROD escribe en un entorno de rama",                     P, PROD_SA, "UPDATE", "deployments", "web", "app-hola-review-x-a1b2c3", None, ns("review"), "DENEGADO"),
- ("PROD escribe en kube-system",                            P, PROD_SA, "CREATE", "configmaps", "x", "kube-system", None, ns(None, psa=None), "DENEGADO"),
- ("PROD escribe un recurso global",                         P, PROD_SA, "CREATE", "clusterrolebindings", "x", "", None, None, "DENEGADO"),
- ("PROD: la política NO mira al runner de ramas",           P, REVIEW_SA, "CREATE", "namespaces", "app-x-review-y-a1b2c3", "", ns("review"), None, "NO APLICA"),
- ("OTRO usuario (admin): ninguna política le afecta",       R, "kubernetes-admin", "DELETE", "namespaces", "app-hola-k8s-prod", "", None, None, "NO APLICA"),
+ ("PROD creates a valid production ns",                    P, PROD_SA, "CREATE", "namespaces", "app-hola-k8s-prod", "", ns("prod"), None, "ALLOWED"),
+ ("PROD creates a branch ns",                                   P, PROD_SA, "CREATE", "namespaces", "app-hola-review-x-a1b2c3", "", ns("review"), None, "DENIED"),
+ ("PROD creates a production ns with the review label",         P, PROD_SA, "CREATE", "namespaces", "app-hola-k8s-prod", "", ns("review"), None, "DENIED"),
+ ("PROD creates an ns without Pod Security",                          P, PROD_SA, "CREATE", "namespaces", "app-hola-k8s-prod", "", ns("prod", psa=None), None, "DENIED"),
+ ("PROD creates a privileged ns",                                P, PROD_SA, "CREATE", "namespaces", "app-hola-k8s-prod", "", ns("prod", psa="privileged"), None, "DENIED"),
+ ("PROD creates a deployment in production",                     P, PROD_SA, "CREATE", "deployments", "web", "app-hola-k8s-prod", None, ns("prod"), "ALLOWED"),
+ ("PROD updates a secret in production",                   P, PROD_SA, "UPDATE", "secrets", "app-db", "app-hola-k8s-prod", None, ns("prod"), "ALLOWED"),
+ ("PROD writes to a branch environment",                     P, PROD_SA, "UPDATE", "deployments", "web", "app-hola-review-x-a1b2c3", None, ns("review"), "DENIED"),
+ ("PROD writes to kube-system",                            P, PROD_SA, "CREATE", "configmaps", "x", "kube-system", None, ns(None, psa=None), "DENIED"),
+ ("PROD writes a global resource",                         P, PROD_SA, "CREATE", "clusterrolebindings", "x", "", None, None, "DENIED"),
+ ("PROD: the policy does NOT look at the branch runner",           P, REVIEW_SA, "CREATE", "namespaces", "app-x-review-y-a1b2c3", "", ns("review"), None, "N/A"),
+ ("OTHER user (admin): no policy affects them",       R, "kubernetes-admin", "DELETE", "namespaces", "app-hola-k8s-prod", "", None, None, "N/A"),
 ]
 fails = 0
 for desc, pol, user, op, res, name, nsp, obj, nso, expected in cases:
     got = decide(pol, user, op, res, name, nsp, obj, nso)
     ok = got == expected; fails += (not ok)
-    print(f"{'ok ' if ok else 'MAL'} {got:10s} {desc}" + ("" if ok else f"   <-- esperado {expected}"))
-print(f"\n{len(cases)} casos, {fails} fallos")
+    print(f"{'ok ' if ok else 'BAD'} {got:10s} {desc}" + ("" if ok else f"   <-- expected {expected}"))
+print(f"\n{len(cases)} cases, {fails} failures")
 raise SystemExit(1 if fails else 0)

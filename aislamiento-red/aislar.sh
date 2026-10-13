@@ -44,7 +44,7 @@ node_ips() {
 render() { # $1 = namespace
   r_ns="$1"
   [ -n "${NODE_IPS:-}" ] || NODE_IPS="$(node_ips)"
-  [ -n "$NODE_IPS" ] || die "no puedo obtener las IP de los nodos"
+  [ -n "$NODE_IPS" ] || die "cannot get the node IPs"
   cat <<EOF
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -98,20 +98,20 @@ namespaces_objetivo() {
 cmd_aplicar() {
   ns=""; todos=0
   while [ $# -gt 0 ]; do
-    case "$1" in --ns) ns="$2"; shift ;; --todos) todos=1 ;; *) die "opción desconocida: $1" ;; esac
+    case "$1" in --ns) ns="$2"; shift ;; --todos) todos=1 ;; *) die "unknown option: $1" ;; esac
     shift
   done
-  NODE_IPS="$(node_ips)"; [ -n "$NODE_IPS" ] || die "no puedo obtener las IP de los nodos"
+  NODE_IPS="$(node_ips)"; [ -n "$NODE_IPS" ] || die "cannot get the node IPs"
   export NODE_IPS
   if [ -n "$ns" ]; then
-    case "$ns" in app-*) ;; *) die "solo se aplica a namespaces app-*" ;; esac
-    render "$ns" | k apply -f - || die "no se pudo aplicar a $ns"
+    case "$ns" in app-*) ;; *) die "it only applies to app-* namespaces" ;; esac
+    render "$ns" | k apply -f - || die "could not apply to $ns"
     return 0
   fi
-  [ "$todos" = 1 ] || die "indica --ns NAMESPACE (canario) o --todos"
+  [ "$todos" = 1 ] || die "give --ns NAMESPACE (canary) or --todos"
   fallos=0
   for n in $(namespaces_objetivo); do
-    out="$(render "$n" | k apply -f - 2>&1)" || { echo "ERROR en $n: $out"; fallos=$((fallos+1)); continue; }
+    out="$(render "$n" | k apply -f - 2>&1)" || { echo "ERROR in $n: $out"; fallos=$((fallos+1)); continue; }
     case "$out" in *unchanged*) ;; *) echo "$n: $out" ;; esac
   done
   [ "$fallos" -eq 0 ]
@@ -120,22 +120,22 @@ cmd_aplicar() {
 cmd_quitar() {
   ns=""
   while [ $# -gt 0 ]; do
-    case "$1" in --ns) ns="$2"; shift ;; *) die "opción desconocida: $1" ;; esac
+    case "$1" in --ns) ns="$2"; shift ;; *) die "unknown option: $1" ;; esac
     shift
   done
-  [ -n "$ns" ] || die "indica --ns NAMESPACE"
+  [ -n "$ns" ] || die "give --ns NAMESPACE"
   k -n "$ns" delete networkpolicy "$NP_NAME" --ignore-not-found
   if k -n "$CRON_NS" get cronjob aislamiento >/dev/null 2>&1; then
-    echo "AVISO: el CronJob de aislamiento sigue instalado y volverá a aplicarla en el próximo minuto."
-    echo "       Para dejarla fuera de forma permanente: sh aislar.sh desinstalar"
+    echo "WARNING: the isolation CronJob is still installed and will apply the policy again within the next minute."
+    echo "         To leave it out permanently: sh aislar.sh desinstalar"
   fi
 }
 
 cmd_estado() {
-  echo "CronJob: $(k -n "$CRON_NS" get cronjob aislamiento --no-headers 2>/dev/null | awk '{print "instalado (" $2 ")"}')"
+  echo "CronJob: $(k -n "$CRON_NS" get cronjob aislamiento --no-headers 2>/dev/null | awk '{print "installed (" $2 ")"}')"
   for n in $(k get ns -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | grep '^app-'); do
     env="$(k get ns "$n" -o jsonpath='{.metadata.labels.kubeops/env}' 2>/dev/null)"
-    if k -n "$n" get networkpolicy "$NP_NAME" >/dev/null 2>&1; then t="CON política"; else t="sin política"; fi
+    if k -n "$n" get networkpolicy "$NP_NAME" >/dev/null 2>&1; then t="WITH policy"; else t="no policy"; fi
     printf '%-60s %-8s %s\n' "$n" "${env:-?}" "$t"
   done
 }
@@ -143,24 +143,24 @@ cmd_estado() {
 cmd_verificar() {
   ns=""; urls=""
   while [ $# -gt 0 ]; do
-    case "$1" in --ns) ns="$2"; shift ;; --url) urls="$urls $2"; shift ;; *) die "opción desconocida: $1" ;; esac
+    case "$1" in --ns) ns="$2"; shift ;; --url) urls="$urls $2"; shift ;; *) die "unknown option: $1" ;; esac
     shift
   done
-  [ -n "$ns" ] || die "indica --ns NAMESPACE"
+  [ -n "$ns" ] || die "give --ns NAMESPACE"
   mal=0
-  if k -n "$ns" get networkpolicy "$NP_NAME" >/dev/null 2>&1; then echo "[OK] política $NP_NAME presente en $ns"; else echo "[FALLO] $ns no tiene la política"; mal=1; fi
+  if k -n "$ns" get networkpolicy "$NP_NAME" >/dev/null 2>&1; then echo "[OK] policy $NP_NAME present in $ns"; else echo "[FAIL] $ns does not have the policy"; mal=1; fi
   echo "-- pods:"; k -n "$ns" get pods
   nolisto="$(k -n "$ns" get pods --no-headers | awk '{split($2,a,"/"); if (a[1]!=a[2] || $3!="Running") print $1}')"
-  if [ -n "$nolisto" ]; then echo "[FALLO] pods no listos: $nolisto"; mal=1; else echo "[OK] todos los pods listos"; fi
+  if [ -n "$nolisto" ]; then echo "[FAIL] pods not ready: $nolisto"; mal=1; else echo "[OK] all pods ready"; fi
   for u in $urls; do
     # -k: only connectivity is checked here; the internal certificate may not be in this machine's CA
     code="$(curl -sk -o /dev/null -m 10 -w '%{http_code}' "$u" 2>/tmp/aislar-curl.err)"; crc=$?
     case "$code" in
       2??|3??) echo "[OK] $u → $code" ;;
-      *) echo "[FALLO] $u → ${code:-sin respuesta} (curl código $crc: $(head -c 200 /tmp/aislar-curl.err))"; mal=1 ;;
+      *) echo "[FAIL] $u → ${code:-no response} (curl code $crc: $(head -c 200 /tmp/aislar-curl.err))"; mal=1 ;;
     esac
   done
-  [ -z "$urls" ] && echo "(no has pasado --url: no se ha comprobado la entrada por Traefik ni la salida del backend a su base de datos)"
+  [ -z "$urls" ] && echo "(no --url given: ingress through Traefik and the backend's egress to its database were not checked)"
   [ "$mal" -eq 0 ]
 }
 
@@ -170,23 +170,23 @@ cmd_verificar() {
 cmd_probar() {
   externo=""
   while [ $# -gt 0 ]; do
-    case "$1" in --externo) externo="$2"; shift ;; *) die "opción desconocida: $1" ;; esac
+    case "$1" in --externo) externo="$2"; shift ;; *) die "unknown option: $1" ;; esac
     shift
   done
   if [ -n "$externo" ]; then
     eh="${externo%%:*}"; ep="${externo##*:}"
-    case "$ep" in ''|*[!0-9]*) die "--externo debe ser IP:PUERTO (recibido: $externo)" ;; esac
+    case "$ep" in ''|*[!0-9]*) die "--externo must be IP:PORT (received: $externo)" ;; esac
     if ! echo "$eh" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
-      getent hosts "$eh" >/dev/null 2>&1 || die "--externo: '$eh' no es una IP ni un nombre que resuelva desde aquí. Usa una IP real, p. ej. la de tu GitLab"
+      getent hosts "$eh" >/dev/null 2>&1 || die "--externo: '$eh' is neither an IP nor a name that resolves from here. Use a real IP, e.g. your GitLab's"
     fi
   fi
   t="$(date +%s)"; A="prueba-aislamiento-$t"; B="prueba-aislamiento-v-$t"
-  trap 'echo "== Limpiando =="; k delete ns "$A" "$B" --wait=false >/dev/null 2>&1' EXIT INT TERM
+  trap 'echo "== Cleaning up =="; k delete ns "$A" "$B" --wait=false >/dev/null 2>&1' EXIT INT TERM
   NODE_IPS="$(node_ips)"; export NODE_IPS
   nodo="$(echo "$NODE_IPS" | head -1)"
   api="$(k -n default get svc kubernetes -o jsonpath='{.spec.clusterIP}')"
-  echo "== Preparando $A (con política) y $B (otro namespace, sin política) =="
-  k create ns "$A" >/dev/null && k create ns "$B" >/dev/null || die "no pude crear los namespaces"
+  echo "== Preparing $A (with policy) and $B (another namespace, without policy) =="
+  k create ns "$A" >/dev/null && k create ns "$B" >/dev/null || die "could not create the namespaces"
   k label ns "$A" "kubeops/env=review" pod-security.kubernetes.io/enforce=baseline --overwrite >/dev/null
   k label ns "$B" pod-security.kubernetes.io/enforce=baseline --overwrite >/dev/null
   srvcmd='while true; do printf "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok" | nc -l -p 8080; done'
@@ -195,52 +195,52 @@ cmd_probar() {
   k -n "$B" run vic --image="$IMG" --restart=Never --command -- sh -c "$srvcmd" >/dev/null || die "pod vic"
   k -n "$A" wait --for=condition=Ready pod/srv pod/cli --timeout=120s >/dev/null 2>&1 \
     && k -n "$B" wait --for=condition=Ready pod/vic --timeout=120s >/dev/null 2>&1 \
-    || { k -n "$A" get pods; k -n "$B" get pods; die "los pods no arrancan (¿existe $IMG en Harbor?)"; }
+    || { k -n "$A" get pods; k -n "$B" get pods; die "the pods do not start (does $IMG exist in Harbor?)"; }
   sleep 3
   srv_ip="$(k -n "$A" get pod srv -o jsonpath='{.status.podIP}')"
   vic_ip="$(k -n "$B" get pod vic -o jsonpath='{.status.podIP}')"
-  echo "srv=$srv_ip  vic=$vic_ip  nodo=$nodo:10250  api=$api:443  externo=${externo:-(no indicado)}"
+  echo "srv=$srv_ip  vic=$vic_ip  node=$nodo:10250  api=$api:443  external=${externo:-(not given)}"
 
-  # medir NS POD HOST PORT -> rapido | lento   (lento = no response within 3 s: packets dropped)
+  # medir NS POD HOST PORT -> fast | slow   (slow = no response within 3 s: packets dropped)
   medir() {
-    k -n "$1" exec "$2" -- sh -c "s=\$(date +%s); wget -q -T 3 -O /dev/null http://$3:$4/ >/dev/null 2>&1; e=\$((\$(date +%s)-s)); if [ \$e -ge 3 ]; then echo lento; else echo rapido; fi" 2>/dev/null
+    k -n "$1" exec "$2" -- sh -c "s=\$(date +%s); wget -q -T 3 -O /dev/null http://$3:$4/ >/dev/null 2>&1; e=\$((\$(date +%s)-s)); if [ \$e -ge 3 ]; then echo slow; else echo fast; fi" 2>/dev/null
   }
-  dns() { k -n "$A" exec cli -- timeout 6 nslookup kubernetes.default.svc.cluster.local >/dev/null 2>&1 && echo rapido || echo lento; }
+  dns() { k -n "$A" exec cli -- timeout 6 nslookup kubernetes.default.svc.cluster.local >/dev/null 2>&1 && echo fast || echo slow; }
 
   b_srv="$(medir "$A" cli "$srv_ip" 8080)"; b_vic="$(medir "$A" cli "$vic_ip" 8080)"
   b_in="$(medir "$B" vic "$srv_ip" 8080)"
   b_nodo="$(medir "$A" cli "$nodo" 10250)"; b_api="$(medir "$A" cli "$api" 443)"; b_dns="$(dns)"
   b_ext=""; [ -n "$externo" ] && b_ext="$(medir "$A" cli "${externo%%:*}" "${externo##*:}")"
 
-  echo; echo "== Aplicando la política a $A =="
-  render "$A" | k apply -f - >/dev/null || die "no pude aplicar la política"
+  echo; echo "== Applying the policy to $A =="
+  render "$A" | k apply -f - >/dev/null || die "could not apply the policy"
   sleep 12
   a_srv="$(medir "$A" cli "$srv_ip" 8080)"; a_vic="$(medir "$A" cli "$vic_ip" 8080)"
   a_in="$(medir "$B" vic "$srv_ip" 8080)"
   a_nodo="$(medir "$A" cli "$nodo" 10250)"; a_api="$(medir "$A" cli "$api" 443)"; a_dns="$(dns)"
   a_ext=""; [ -n "$externo" ] && a_ext="$(medir "$A" cli "${externo%%:*}" "${externo##*:}")"
 
-  echo; echo "== Resultado (antes → después de la política) =="
+  echo; echo "== Result (before → after the policy) =="
   malos=0; inconclusos=0
   # chequea LABEL BEFORE AFTER EXPECTED(permite|bloquea)
   chequea() {
-    if [ "$2" != "rapido" ]; then echo "[INCONCLUSO] $1: ya no respondía antes de la política ($2 → $3); no se puede comparar"; inconclusos=$((inconclusos+1)); return; fi
+    if [ "$2" != "fast" ]; then echo "[INCONCLUSIVE] $1: it was not answering even before the policy ($2 → $3); cannot compare"; inconclusos=$((inconclusos+1)); return; fi
     if [ "$4" = permite ]; then
-      if [ "$3" = rapido ]; then echo "[OK]      $1: $2 → $3 (permitido, como debe)"; else echo "[FALLO]   $1: $2 → $3 (debería seguir permitido)"; malos=$((malos+1)); fi
+      if [ "$3" = fast ]; then echo "[OK]      $1: $2 → $3 (allowed, as it should be)"; else echo "[FAIL]    $1: $2 → $3 (should still be allowed)"; malos=$((malos+1)); fi
     else
-      if [ "$3" = lento ]; then echo "[OK]      $1: $2 → $3 (bloqueado, como debe)"; else echo "[FALLO]   $1: $2 → $3 (debería quedar bloqueado)"; malos=$((malos+1)); fi
+      if [ "$3" = slow ]; then echo "[OK]      $1: $2 → $3 (blocked, as it should be)"; else echo "[FAIL]    $1: $2 → $3 (should be blocked)"; malos=$((malos+1)); fi
     fi
   }
   chequea "mismo namespace (cli → srv)" "$b_srv" "$a_srv" permite
-  chequea "DNS del clúster" "$b_dns" "$a_dns" permite
-  chequea "otra aplicación (cli → pod de otro namespace)" "$b_vic" "$a_vic" bloquea
-  chequea "otra aplicación hacia aquí (pod de otro namespace → srv)" "$b_in" "$a_in" bloquea
+  chequea "cluster DNS" "$b_dns" "$a_dns" permite
+  chequea "another application (cli → pod in another namespace)" "$b_vic" "$a_vic" bloquea
+  chequea "another application towards here (pod in another namespace → srv)" "$b_in" "$a_in" bloquea
   chequea "kubelet del nodo $nodo:10250" "$b_nodo" "$a_nodo" bloquea
   chequea "API de Kubernetes $api:443" "$b_api" "$a_api" bloquea
   if [ -n "$externo" ]; then chequea "destino externo $externo" "$b_ext" "$a_ext" permite
-  else echo "[SALTADO] destino externo: pasa --externo IP:PUERTO de una base de datos real para comprobar que sigue accesible"; fi
+  else echo "[SKIPPED] external destination: pass --externo IP:PORT of a real database to check that it is still reachable"; fi
   echo
-  echo "Resumen: fallos $malos · inconclusos $inconclusos"
+  echo "Summary: failures $malos · inconclusive $inconclusos"
   [ "$malos" -eq 0 ] && [ "$inconclusos" -eq 0 ]
 }
 
@@ -250,13 +250,13 @@ cmd_probar() {
 cmd_instalar() {
   incl=0
   while [ $# -gt 0 ]; do
-    case "$1" in --incluir-prod) incl=1 ;; *) die "opción desconocida: $1" ;; esac
+    case "$1" in --incluir-prod) incl=1 ;; *) die "unknown option: $1" ;; esac
     shift
   done
   k create ns "$CRON_NS" --dry-run=client -o yaml | k apply -f - >/dev/null || die "namespace"
   k label ns "$CRON_NS" pod-security.kubernetes.io/enforce=baseline --overwrite >/dev/null
   k -n "$CRON_NS" create configmap aislar-script --from-file=aislar.sh="$AQUI/aislar.sh" --dry-run=client -o yaml | k apply -f - >/dev/null || die "configmap"
-  cat <<EOF | k apply -f - || die "no se pudo instalar el CronJob"
+  cat <<EOF | k apply -f - || die "could not install the CronJob"
 apiVersion: v1
 kind: ServiceAccount
 metadata: {name: aislamiento, namespace: $CRON_NS}
@@ -308,17 +308,17 @@ spec:
               resources: {requests: {cpu: 20m, memory: 32Mi}, limits: {cpu: 200m, memory: 128Mi}}
           volumes: [{name: s, configMap: {name: aislar-script}}]
 EOF
-  echo "CronJob instalado: aplica la política a los namespaces app-* con kubeops/env=review$( [ "$incl" = 1 ] && echo ' y prod') cada minuto."
+  echo "CronJob installed: it applies the policy to app-* namespaces with kubeops/env=review$( [ "$incl" = 1 ] && echo ' and prod') every minute."
 }
 
 cmd_desinstalar() {
   k -n "$CRON_NS" delete cronjob aislamiento --ignore-not-found
-  echo "CronJob retirado. Las políticas ya aplicadas siguen; para quitarlas: sh aislar.sh quitar --ns NAMESPACE"
+  echo "CronJob removed. Policies already applied remain; to remove them: sh aislar.sh quitar --ns NAMESPACE"
 }
 
 cmd="${1:-}"; [ $# -gt 0 ] && shift
 case "$cmd" in
-  render) [ $# -ge 1 ] || die "uso: render NAMESPACE"; render "$1" ;;
+  render) [ $# -ge 1 ] || die "usage: render NAMESPACE"; render "$1" ;;
   probar) cmd_probar "$@" ;;
   aplicar) cmd_aplicar "$@" ;;
   quitar) cmd_quitar "$@" ;;

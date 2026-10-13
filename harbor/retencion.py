@@ -36,7 +36,7 @@ class Harbor:
         try:
             self.ctx = ssl.create_default_context(cafile=ca) if ca else ssl.create_default_context()
         except (OSError, ssl.SSLError) as e:
-            fail(f"No se pudo leer la CA '{ca}' ({e}). Indica con --ca el fichero PEM de la CA de Harbor.")
+            fail(f"Could not read the CA '{ca}' ({e}). Use --ca to give the PEM file of Harbor's CA.")
 
     def call(self, path, method="GET", body=None):
         data = json.dumps(body).encode() if body is not None else None
@@ -51,19 +51,19 @@ class Harbor:
         except urllib.error.HTTPError as e:
             return e.code, e.headers, e.read().decode("utf-8", "replace")
         except urllib.error.URLError as e:
-            fail(f"No se pudo conectar con Harbor ({e.reason}). ¿Es correcta la dirección y la CA (--ca)?")
+            fail(f"Could not connect to Harbor ({e.reason}). Are the address and the CA (--ca) correct?")
 
     def json(self, path, **kw):
         status, headers, text = self.call(path, **kw)
         if status >= 300:
-            fail(f"Harbor respondió {status} a {kw.get('method', 'GET')} {path}: {text[:300]}")
+            fail(f"Harbor answered {status} to {kw.get('method', 'GET')} {path}: {text[:300]}")
         return headers, (json.loads(text) if text.strip() else None)
 
 
 def check_exist(h, project):
     """Checks that every image the cluster uses is still in Harbor. Returns 1 if any is missing."""
     in_use = images_in_use(project)
-    print(f"Comprobando que existen las {len(in_use)} imágenes de {project} que usa el clúster…")
+    print(f"Checking that the {len(in_use)} {project} images the cluster uses exist…")
     missing = 0
     for (repo, tag), pods in sorted(in_use.items()):
         status, _, _ = h.call(f"/projects/{project}/repositories/{repo}/artifacts/{tag}")
@@ -71,14 +71,14 @@ def check_exist(h, project):
             print(f"  ok       {repo}:{tag}")
         elif status == 404:
             missing += 1
-            print(f"  FALTA    {repo}:{tag}  ya no está en Harbor y la usan: {', '.join(sorted(pods))[:90]}")
+            print(f"  MISSING  {repo}:{tag}  no longer in Harbor and used by: {', '.join(sorted(pods))[:90]}")
         else:
             missing += 1
-            print(f"  ?        {repo}:{tag}  Harbor respondió {status}")
+            print(f"  ?        {repo}:{tag}  Harbor answered {status}")
     if missing:
-        print(f"\n{missing} imagen(es) no están: un pod nuevo que las necesite no arrancará (ImagePullBackOff).")
+        print(f"\n{missing} image(s) are missing: a new pod that needs them will not start (ImagePullBackOff).")
         return 1
-    print("\nTodas las imágenes en uso siguen en Harbor.")
+    print("\nAll the images in use are still in Harbor.")
     return 0
 
 
@@ -93,7 +93,7 @@ def images_in_use(project):
     try:
         out = subprocess.run(["kubectl", "get", "pods", "-A", "-o", "json"], capture_output=True, text=True, check=True).stdout
     except (OSError, subprocess.CalledProcessError) as e:
-        fail(f"No se pudo ejecutar kubectl: {e}")
+        fail(f"Could not run kubectl: {e}")
     found = {}
     for pod in json.loads(out)["items"]:
         spec = pod["spec"]
@@ -130,7 +130,7 @@ def is_deleted(row):
 
 # ---------------------------------------------------------------- Flow
 def run(args):
-    password = os.environ.get("HARBOR_PASS") or getpass.getpass(f"Contraseña de {args.user} en Harbor: ")
+    password = os.environ.get("HARBOR_PASS") or getpass.getpass(f"Password for {args.user} in Harbor: ")
     h = Harbor(args.harbor, args.user, password, args.ca)
 
     if args.existen:
@@ -139,21 +139,21 @@ def run(args):
     _, project = h.json(f"/projects/{args.project}")
     rid = (project.get("metadata") or {}).get("retention_id")
     if not rid:
-        fail(f"El proyecto {args.project} no tiene una política de retención. Créala en Harbor: Projects, {args.project}, Policy.")
+        fail(f"Project {args.project} has no retention policy. Create it in Harbor: Projects, {args.project}, Policy.")
 
     if args.ultima:
         _, executions = h.json(f"/retentions/{rid}/executions")
         if not executions:
-            fail("Todavía no hay ninguna ejecución de la política. Lanza una simulación (Dry Run) desde Harbor.")
+            fail("There is no run of the policy yet. Launch a simulation (Dry Run) from Harbor.")
         eid = max(e["id"] for e in executions)
-        print(f"Analizando la última ejecución ({eid}).")
+        print(f"Analysing the last run ({eid}).")
     else:
         headers, _ = h.json(f"/retentions/{rid}/executions", method="POST", body={"dry_run": True})
         location = headers.get("Location", "")
         if not location:
-            fail("Harbor no devolvió la dirección de la ejecución lanzada.")
+            fail("Harbor did not return the address of the launched run.")
         eid = int(location.rstrip("/").rsplit("/", 1)[1])
-        print(f"Simulación lanzada (ejecución {eid}); esperando el resultado…")
+        print(f"Simulation launched (run {eid}); waiting for the result…")
 
     deadline = time.time() + args.espera
     while True:
@@ -161,68 +161,68 @@ def run(args):
         if str(execution.get("status", "")).lower() not in ("running", "pending", "in progress"):
             break
         if time.time() > deadline:
-            fail("La simulación no ha terminado a tiempo. Vuelve a ejecutar con --ultima en unos minutos.")
+            fail("The simulation did not finish in time. Run again with --ultima in a few minutes.")
         time.sleep(3)
     if not execution.get("dry_run", True):
-        fail(f"La ejecución {eid} NO es una simulación. Por seguridad no se analiza.")
+        fail(f"Run {eid} is NOT a simulation. It is not analysed, for safety.")
 
     _, tasks = h.json(f"/retentions/{rid}/executions/{eid}/tasks")
     per_repo = {}
     for t in tasks or []:
         status, _, text = h.call(f"/retentions/{rid}/executions/{eid}/tasks/{t['id']}")
         if status >= 300:
-            fail(f"No se pudo leer el registro de {t.get('repository')}: Harbor respondió {status}")
+            fail(f"Could not read the log of {t.get('repository')}: Harbor answered {status}")
         per_repo[t["repository"]] = parse_log(text)
         if not per_repo[t["repository"]] and text.strip():
-            print(f"AVISO: no se reconoce el formato del registro de {t['repository']}. Primeras líneas:\n  "
+            print(f"WARNING: the log format of {t['repository']} is not recognised. First lines:\n  "
                   + "\n  ".join(text.splitlines()[:6]))
 
-    print(f"\n{'Repositorio':44s} {'Se conservan':>13s} {'Se borrarían':>13s}")
+    print(f"\n{'Repository':44s} {'Kept':>13s} {'Deleted':>13s}")
     for repo in sorted(per_repo):
         rows = per_repo[repo]
         gone = sum(1 for r in rows if is_deleted(r))
         print(f"{repo:44s} {len(rows) - gone:13d} {gone:13d}")
     if not per_repo:
-        print("(ningún repositorio entra en la política: no se tocaría nada)")
+        print("(no repository falls under the policy: nothing would be touched)")
 
     return check_in_use(args.project, per_repo)
 
 
 def check_in_use(project, per_repo):
     in_use = images_in_use(project)
-    print(f"\nImágenes de {project} en uso ahora mismo: {len(in_use)}")
+    print(f"\n{project} images in use right now: {len(in_use)}")
     alerts = 0
     for (repo, tag), pods in sorted(in_use.items()):
         # In the log the repository appears with or without the project prefix.
         rows = per_repo.get(repo) or per_repo.get(f"{project}/{repo}")
         if rows is None:
-            print(f"  ok       {repo}:{tag}  (el repositorio no entra en la política)")
+            print(f"  ok       {repo}:{tag}  (the repository does not fall under the policy)")
             continue
         hit = [r for r in rows if r["tag"] == tag]
         if not hit:
-            print(f"  ok       {repo}:{tag}  (no aparece en el registro: no se toca)")
+            print(f"  ok       {repo}:{tag}  (not in the log: it is not touched)")
         elif any(is_deleted(r) for r in hit):
             alerts += 1
-            print(f"  ALERTA   {repo}:{tag}  SE BORRARÍA y la usan: {', '.join(sorted(pods))[:90]}")
+            print(f"  ALERT    {repo}:{tag}  WOULD BE DELETED and is used by: {', '.join(sorted(pods))[:90]}")
         else:
-            print(f"  ok       {repo}:{tag}  se conserva")
+            print(f"  ok       {repo}:{tag}  kept")
     if alerts:
-        print(f"\n{alerts} imagen(es) en uso se borrarían. NO actives la política: ajusta las reglas y repite la simulación.")
+        print(f"\n{alerts} image(s) in use would be deleted. Do NOT activate the policy: adjust the rules and repeat the simulation.")
         return 1
-    print("\nNinguna imagen en uso se borraría con esta política.")
+    print("\nNo image in use would be deleted by this policy.")
     return 0
 
 
 def main():
-    p = argparse.ArgumentParser(description="Simula la retención de Harbor y comprueba las imágenes en uso.")
+    p = argparse.ArgumentParser(description="Simulates Harbor retention and checks the images in use.")
     p.add_argument("--harbor", default="https://harbor.example.com")
     p.add_argument("--project", default="apps")
     p.add_argument("--user", default="admin")
-    p.add_argument("--ca", help="fichero PEM con la CA de Harbor")
-    p.add_argument("--ultima", action="store_true", help="analiza la última ejecución en lugar de lanzar una simulación")
-    p.add_argument("--existen", action="store_true", help="comprueba que las imágenes en uso siguen existiendo en Harbor")
-    p.add_argument("--solo-en-uso", action="store_true", help="solo lista las imágenes en uso (sin conectar con Harbor)")
-    p.add_argument("--espera", type=int, default=600, help="segundos máximos de espera (por defecto 600)")
+    p.add_argument("--ca", help="PEM file with Harbor's CA")
+    p.add_argument("--ultima", action="store_true", help="analyses the last run instead of launching a simulation")
+    p.add_argument("--existen", action="store_true", help="checks that the images in use still exist in Harbor")
+    p.add_argument("--solo-en-uso", action="store_true", help="only lists the images in use (without connecting to Harbor)")
+    p.add_argument("--espera", type=int, default=600, help="maximum seconds to wait (default 600)")
     args = p.parse_args()
 
     if args.solo_en_uso:

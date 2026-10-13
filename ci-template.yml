@@ -33,7 +33,7 @@ lint_dockerfiles:
       for f in $(find . -name 'Dockerfile*' -not -path '*/node_modules/*'); do
         awk -v h="$HARBOR" 'tolower($1)=="from"{img=$2; if(img ~ /^--/) img=$3; if(index(img,h"/")!=1 && !(tolower(img) in st)){print FILENAME": "$0; bad=1} if(tolower($(NF-1))=="as") st[tolower($NF)]=1} END{exit bad}' "$f" || bad=1
       done
-      [ "$bad" = 0 ] || { echo "ERROR: todo FROM debe partir de $HARBOR/"; exit 1; }
+      [ "$bad" = 0 ] || { echo "ERROR: every FROM must start from $HARBOR/"; exit 1; }
 
 .build:
   stage: build
@@ -122,16 +122,16 @@ build_back:
       # Database credentials: sysadmins define them in each GitLab project, with scope
       # review/* (branches) and production. If the application declares them and they do not arrive, it stops here with a
       # clear message, instead of deploying with an empty Secret and a hard-to-understand connection error.
-      echo "Valores aplicados: deploy/values.yaml ${VALUES_EXTRA:-(ningún fichero propio de este entorno)}"
+      echo "Values applied: deploy/values.yaml ${VALUES_EXTRA:-(no environment-specific file)}"
       VFILES="deploy/values.yaml $(echo "$VALUES_EXTRA" | sed 's/-f //g')"
       MISSING=""
       [ -z "$DB_USER" ] && MISSING="$MISSING DB_USER"
       [ -z "$DB_PASSWORD" ] && MISSING="$MISSING DB_PASSWORD"
       if [ -n "$MISSING" ] && grep -qsE 'DB_(USER|PASSWORD)' $VFILES; then
-        echo "ERROR: tu aplicación usa credenciales de base de datos, pero en este entorno faltan:$MISSING"
-        echo "Entorno: $CI_ENVIRONMENT_NAME"
-        echo "Pide a Sistemas que las defina en el proyecto (ámbito review/* para ramas, production para producción)."
-        echo "En producción las variables son protegidas: solo llegan a pipelines de ramas protegidas (main)."
+        echo "ERROR: your application uses database credentials, but they are missing in this environment:$MISSING"
+        echo "Environment: $CI_ENVIRONMENT_NAME"
+        echo "Ask your sysadmins to define them in the project (scope review/* for branches, production for production)."
+        echo "In production the variables are protected: they only reach pipelines of protected branches (main)."
         exit 1
       fi
     - kubectl -n "$NS" create secret generic app-db

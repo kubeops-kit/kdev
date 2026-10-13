@@ -22,13 +22,13 @@ set -euo pipefail
 cmd="${1:-}"
 project="${2:-}"
 [ -n "$cmd" ] && [ -n "$project" ] || { sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
-: "${GITLAB_URL:?Falta GITLAB_URL (por ejemplo http://gitlab.example.com)}"
+: "${GITLAB_URL:?GITLAB_URL is missing (e.g. http://gitlab.example.com)}"
 GITLAB_URL="${GITLAB_URL%/}"
-command -v curl >/dev/null || { echo "ERROR: falta curl" >&2; exit 2; }
-command -v python3 >/dev/null || { echo "ERROR: falta python3" >&2; exit 2; }
+command -v curl >/dev/null || { echo "ERROR: curl is missing" >&2; exit 2; }
+command -v python3 >/dev/null || { echo "ERROR: python3 is missing" >&2; exit 2; }
 
 if [ -z "${GITLAB_TOKEN:-}" ]; then
-  read -r -s -p "Token de GitLab (permiso api): " GITLAB_TOKEN; echo
+  read -r -s -p "GitLab token (api scope): " GITLAB_TOKEN; echo
 fi
 CURL=(curl -sS --max-time 30 -H "PRIVATE-TOKEN: $GITLAB_TOKEN")
 [ -n "${CA_GITLAB:-}" ] && CURL+=(--cacert "$CA_GITLAB")
@@ -48,7 +48,7 @@ call() { # method, url, [json-file]
   fi
 }
 
-fail_http() { echo "ERROR: GitLab respondió $1 a $2" >&2; head -c 400 "$BODY" >&2; echo >&2; rm -f "$BODY"; exit 2; }
+fail_http() { echo "ERROR: GitLab answered $1 to $2" >&2; head -c 400 "$BODY" >&2; echo >&2; rm -f "$BODY"; exit 2; }
 
 listar() {
   call GET "$API?per_page=100"
@@ -57,13 +57,13 @@ listar() {
 import json, sys
 rows = [v for v in json.load(open(sys.argv[1])) if v["key"] in ("DB_USER", "DB_PASSWORD")]
 if not rows:
-    print("Este proyecto no tiene definidas DB_USER ni DB_PASSWORD.")
+    print("This project has neither DB_USER nor DB_PASSWORD defined.")
 for v in sorted(rows, key=lambda v: (v["environment_scope"], v["key"])):
     flags = []
-    flags.append("protegida" if v.get("protected") else "no protegida")
-    flags.append("enmascarada" if v.get("masked") else "SIN enmascarar")
-    flags.append("sin expandir" if v.get("raw") else "EXPANDE referencias")
-    print(f'{v["key"]:12s} ámbito {v["environment_scope"]:12s} {", ".join(flags)}')
+    flags.append("protected" if v.get("protected") else "not protected")
+    flags.append("masked" if v.get("masked") else "NOT masked")
+    flags.append("not expanded" if v.get("raw") else "EXPANDS references")
+    print(f'{v["key"]:12s} scope {v["environment_scope"]:12s} {", ".join(flags)}')
 PY
   rm -f "$BODY"
 }
@@ -83,15 +83,15 @@ PY
     rm -f "$BODY"
     scope_q="$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$scope")"
     call PUT "$API/$key?filter%5Benvironment_scope%5D=$scope_q" "$tmp"
-    verb="actualizada"
+    verb="updated"
   else
-    verb="creada"
+    verb="created"
   fi
   if [ "$CODE" = "201" ] || [ "$CODE" = "200" ]; then
-    echo "  $key  ámbito $scope: $verb (protegida: $prot, enmascarada: $mask)"
+    echo "  $key  scope $scope: $verb (protected: $prot, masked: $mask)"
   elif grep -q '"value"' "$BODY" 2>/dev/null && grep -qi "invalid\|masked" "$BODY"; then
-    echo "  ERROR: GitLab no puede enmascarar el valor de $key. Para enmascarar necesita 8 o más caracteres," >&2
-    echo "         en una sola línea y solo letras, números y los símbolos @ : . ~ + / = - _ . Cambia la contraseña." >&2
+    echo "  ERROR: GitLab cannot mask the value of $key. To mask it needs 8 or more characters," >&2
+    echo "         on a single line and only letters, numbers and the symbols @ : . ~ + / = - _ . Change the password." >&2
     rm -f "$tmp" "$BODY"; exit 2
   else
     rm -f "$tmp"; fail_http "$CODE" "$key ($scope)"
@@ -102,38 +102,38 @@ PY
 pedir() { # prompt, variable-name, silent(0|1)
   local v
   if [ "$3" = "1" ]; then read -r -s -p "$1" v; echo; else read -r -p "$1" v; fi
-  [ -n "$v" ] || { echo "ERROR: no puede estar vacío" >&2; exit 2; }
+  [ -n "$v" ] || { echo "ERROR: it cannot be empty" >&2; exit 2; }
   printf -v "$2" '%s' "$v"
 }
 
 case "$cmd" in
   listar) listar ;;
   crear)
-    echo "Proyecto: $project   (GitLab: $GITLAB_URL)"
-    echo; echo "Entornos de RAMA (base de datos de desarrollo):"
-    pedir "  Usuario: " U_DEV 0
-    pedir "  Contraseña: " P_DEV 1
-    echo; echo "PRODUCCIÓN:"
-    pedir "  Usuario: " U_PROD 0
-    pedir "  Contraseña: " P_PROD 1
-    [ "$P_DEV" != "$P_PROD" ] || { echo "ERROR: la contraseña de desarrollo y la de producción son la misma." >&2; exit 2; }
+    echo "Project: $project   (GitLab: $GITLAB_URL)"
+    echo; echo "BRANCH environments (development database):"
+    pedir "  User: " U_DEV 0
+    pedir "  Password: " P_DEV 1
+    echo; echo "PRODUCTION:"
+    pedir "  User: " U_PROD 0
+    pedir "  Password: " P_PROD 1
+    [ "$P_DEV" != "$P_PROD" ] || { echo "ERROR: the development and production passwords are the same." >&2; exit 2; }
     # Checked BEFORE touching anything, so the project is not left half-done if a password cannot be masked.
     for P in "$P_DEV" "$P_PROD"; do
       if [ "${#P}" -lt 8 ] || ! printf '%s' "$P" | grep -qE '^[A-Za-z0-9_+=/@:.~-]+$'; then
-        echo "ERROR: una contraseña no se puede enmascarar en GitLab. Necesita 8 o más caracteres, en una sola línea," >&2
-        echo "       y solo letras, números y los símbolos @ : . ~ + / = - _ . No se ha cambiado nada." >&2
+        echo "ERROR: a password cannot be masked in GitLab. It needs 8 or more characters, on a single line," >&2
+        echo "       and only letters, numbers and the symbols @ : . ~ + / = - _ . Nothing has been changed." >&2
         exit 2
       fi
     done
-    echo; echo "Guardando en GitLab…"
+    echo; echo "Saving to GitLab…"
     # The user is not masked: GitLab requires 8 or more characters and a user is not a secret.
     upsert DB_USER     "$U_DEV"  'review/*'   false false
     upsert DB_PASSWORD "$P_DEV"  'review/*'   false true
     upsert DB_USER     "$U_PROD" 'production' true  false
     upsert DB_PASSWORD "$P_PROD" 'production' true  true
     unset P_DEV P_PROD U_DEV U_PROD
-    echo; echo "Comprobación:"; listar
-    echo; echo "Recuerda: main debe ser una rama protegida, o las variables de producción no llegarán al pipeline."
+    echo; echo "Check:"; listar
+    echo; echo "Remember: main must be a protected branch, or the production variables will not reach the pipeline."
     ;;
-  *) echo "Orden desconocida: $cmd (usa crear o listar)" >&2; exit 1 ;;
+  *) echo "Unknown command: $cmd (use crear or listar)" >&2; exit 1 ;;
 esac

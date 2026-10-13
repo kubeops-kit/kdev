@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head><meta charset="utf-8"><title>hola-k8s</title></head>
 <body style="font-family: sans-serif; max-width: 40rem; margin: 3rem auto;">
   <h1>hola-k8s</h1>
-  <p>Frontend servido por nginx. Respuesta del backend (<code>/api/hello</code>):</p>
-  <pre id="out">cargando...</pre>
+  <p>Frontend served by nginx. Backend response (<code>/api/hello</code>):</p>
+  <pre id="out">loading...</pre>
   <script>
     fetch('/api/hello')
       .then(r => r.json())
