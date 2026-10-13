@@ -50,6 +50,10 @@ To run the first three locally: `pip install shellcheck-py yamllint cel-python p
 Documentation and code comments are in English. The scripts' subcommands, output messages and
 identifiers (e.g. `aplicar`, `probar`, `estado`) are still in Spanish; the READMEs include short glossaries where it matters.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE).
