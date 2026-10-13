@@ -4,7 +4,7 @@
 Por defecto NO CAMBIA NADA: muestra lo que habría que cambiar (y sale con código 1 si hay algo).
 Con --aplicar lo cambia. Solo usa la biblioteca estándar.
 
-  export GITLAB_URL=http://gitlab.intranet.net
+  export GITLAB_URL=http://gitlab.example.com
   export GITLAB_TOKEN=glpat-...          # ámbito api, de un administrador o propietario del grupo
   python3 -I proteger-gitlab.py --grupo 12                       # revisión previa
   python3 -I proteger-gitlab.py --grupo 12 --aplicar             # aplicar

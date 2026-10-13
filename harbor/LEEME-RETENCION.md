@@ -95,7 +95,7 @@ ninguna programación.**
 Desde la interfaz: **Dry Run** y lee el registro. Después, la comprobación automática contra el clúster:
 
 ```bash
-python3 retencion.py --harbor https://harbor.stic.intranet.net --ca ca-harbor.pem --user admin
+python3 retencion.py --harbor https://harbor.example.com --ca ca-harbor.pem --user admin
 ```
 
 Lanza una simulación (nunca borra), espera, lee el resultado y lo cruza con las imágenes que usa el
@@ -115,7 +115,7 @@ versiones de `main` conservadas, `kdev` y los repositorios de `base`, `ci` y `ra
 Solo con la simulación limpia: **Run Now** en la política. Después, el control que importa:
 
 ```bash
-python3 retencion.py --harbor https://harbor.stic.intranet.net --ca ca-harbor.pem --user admin --existen
+python3 retencion.py --harbor https://harbor.example.com --ca ca-harbor.pem --user admin --existen
 ```
 
 Comprueba que **cada imagen que usa el clúster sigue existiendo** en Harbor. Código de salida 0 = todo bien.

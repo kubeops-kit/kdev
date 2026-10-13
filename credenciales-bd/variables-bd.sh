@@ -9,7 +9,7 @@
 #   ./variables-bd.sh listar desarrollo-k8s/mi-app     # qué hay definido (nunca enseña los valores)
 #
 # Variables de entorno:
-#   GITLAB_URL     dirección de GitLab, por ejemplo http://gitlab.stic.intranet.net  (obligatoria)
+#   GITLAB_URL     dirección de GitLab, por ejemplo http://gitlab.example.com  (obligatoria)
 #   GITLAB_TOKEN   token con permiso «api» y rol Maintainer: mejor uno del GRUPO desarrollo-k8s, con caducidad corta
 #                  (Grupo, Settings, Access Tokens). Se pregunta, sin mostrarlo, si no está definido.
 #   CA_GITLAB      fichero PEM de la CA, solo si GitLab va por HTTPS con una CA propia
@@ -22,7 +22,7 @@ set -euo pipefail
 cmd="${1:-}"
 project="${2:-}"
 [ -n "$cmd" ] && [ -n "$project" ] || { sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
-: "${GITLAB_URL:?Falta GITLAB_URL (por ejemplo http://gitlab.stic.intranet.net)}"
+: "${GITLAB_URL:?Falta GITLAB_URL (por ejemplo http://gitlab.example.com)}"
 GITLAB_URL="${GITLAB_URL%/}"
 command -v curl >/dev/null || { echo "ERROR: falta curl" >&2; exit 2; }
 command -v python3 >/dev/null || { echo "ERROR: falta python3" >&2; exit 2; }

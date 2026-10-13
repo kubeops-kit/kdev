@@ -6,7 +6,7 @@ Con las políticas en modo aviso, un despliegue legítimo NO debe provocar ning�
 bloqueado un pipeline real: hay que entender por qué antes de pasar a enforce.
 
 Uso:
-  export GITLAB_URL=http://gitlab.intranet.net
+  export GITLAB_URL=http://gitlab.example.com
   export GITLAB_TOKEN=glpat-...        # ámbito read_api (y ser miembro de los proyectos)
   python3 -I ver-avisos-gitlab.py --grupo 12            # todos los proyectos del grupo y subgrupos
   python3 -I ver-avisos-gitlab.py --proyecto 34 --proyecto 35

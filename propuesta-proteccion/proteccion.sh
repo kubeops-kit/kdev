@@ -314,7 +314,7 @@ despliegue_simulado() { # ID quien ns
   out="$r1"
   # b) El chart real con la misma forma de llamada que la plantilla
   r2="$("$HELM" template prueba-proteccion "$CHART_DIR" -n "$ns" --set app=prueba-proteccion \
-        --set image.registry=harbor.stic.intranet.net/apps --set image.tag=prueba --set ingress.host=prueba-proteccion.dev.intranet.net 2>&1 \
+        --set image.registry=harbor.example.com/apps --set image.tag=prueba --set ingress.host=prueba-proteccion.dev.example.com 2>&1 \
         | k --as="$sa" -n "$ns" apply --dry-run=server -f - 2>&1)"; local rc2=$?
   [ "$rc2" -ne 0 ] && rc=$rc2
   out="$out"$'\n'"$r2"
@@ -521,7 +521,7 @@ cmd_estado() {
 # Runner de producción
 # --------------------------------------------------------------------------------------------
 cmd_crear_runner_gitlab() {
-  : "${GITLAB_URL:?define GITLAB_URL, p. ej. http://gitlab.intranet.net}"
+  : "${GITLAB_URL:?define GITLAB_URL, p. ej. http://gitlab.example.com}"
   : "${GITLAB_TOKEN:?define GITLAB_TOKEN (token personal con ámbito create_runner)}"
   : "${GRUPO_ID:?define GRUPO_ID (id numérico del grupo, p. ej. el de desarrollo-k8s)}"
   local resp tok f="$ESTADO/runner-prod.token"

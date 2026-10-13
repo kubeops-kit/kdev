@@ -8,7 +8,7 @@
 #   bash probar-netpol.sh
 set -u
 KUBECTL="${KUBECTL:-kubectl}"
-IMG="${IMG:-harbor.stic.intranet.net/base/alpine:3.20}"
+IMG="${IMG:-harbor.example.com/base/alpine:3.20}"
 NS="prueba-netpol-$(date +%s)"
 k() { "$KUBECTL" "$@"; }
 

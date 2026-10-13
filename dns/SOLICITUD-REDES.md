@@ -48,10 +48,10 @@ Lo más coherente es **hacer lo mismo que las aplicaciones que ya salen por el A
 si solo da una IP, son hosts. Si se quiere alias y no hay un nombre del A10, se crea uno una vez:
 
 ```text
-entrada-k8s.stic.intranet.net     A       <IP-del-VIP>
-*.dev.intranet.net           CNAME   entrada-k8s.stic.intranet.net.
-*.apps.intranet.net          CNAME   entrada-k8s.stic.intranet.net.
-kdev.intranet.net            CNAME   entrada-k8s.stic.intranet.net.
+entrada-k8s.example.com     A       <IP-del-VIP>
+*.dev.example.com           CNAME   entrada-k8s.example.com.
+*.apps.example.com          CNAME   entrada-k8s.example.com.
+kdev.example.com            CNAME   entrada-k8s.example.com.
 ```
 
 En BIND, el punto final del destino es obligatorio. El certificado debe cubrir el nombre que escribe el
@@ -67,17 +67,17 @@ Texto para pegar en el ticket. Sustituye los datos entre corchetes.
 >
 > | Nombre | Para qué | Registro |
 > |---|---|---|
-> | `*.dev.intranet.net` | Un entorno de pruebas por cada rama de desarrollo, creados y borrados automáticamente | A (o CNAME) → `[IP del VIP del A10]` |
-> | `kdev.intranet.net` | Portal de desarrollo (KubeDev) | A → `[IP del VIP]` |
-> | `*.apps.intranet.net` | Aplicaciones en producción: una por nombre (`hola-k8s.apps…`, `facturas.apps…`). Con el comodín no hará falta pedir nada por cada aplicación nueva | A (o CNAME) → `[IP del VIP]` |
+> | `*.dev.example.com` | Un entorno de pruebas por cada rama de desarrollo, creados y borrados automáticamente | A (o CNAME) → `[IP del VIP del A10]` |
+> | `kdev.example.com` | Portal de desarrollo (KubeDev) | A → `[IP del VIP]` |
+> | `*.apps.example.com` | Aplicaciones en producción: una por nombre (`hola-k8s.apps…`, `facturas.apps…`). Con el comodín no hará falta pedir nada por cada aplicación nueva | A (o CNAME) → `[IP del VIP]` |
 >
 > En el A10, para esos nombres (si ya existe un servicio virtual para otras aplicaciones del clúster, basta
 > con añadirlos a él):
 >
 > 1. **Servicio virtual** en el VIP, puertos 443 y 80. El 80 puede redirigir al 443.
-> 2. **Certificado** que cubra `*.dev.intranet.net`, `*.apps.intranet.net` y `kdev.intranet.net`:
+> 2. **Certificado** que cubra `*.dev.example.com`, `*.apps.example.com` y `kdev.example.com`:
 >    un certificado con varios nombres, o uno por nombre con SNI. Un comodín `*.dev…` **no** cubre `*.apps…`
->    ni `kdev.stic…`, son niveles distintos.
+>    ni `kdev.example…`, son niveles distintos.
 > 3. **Servidores reales**: los nodos del clúster, puerto **80 (HTTP)**. Lista: `[IP de los nodos]`.
 > 4. **Comprobación de salud**: TCP al puerto 80.
 > 5. **Cabeceras**: conservar `Host` tal cual, y añadir `X-Forwarded-For` y `X-Forwarded-Proto: https`.
@@ -98,15 +98,15 @@ La IP del VIP es la que ya usa el A10 para las demás aplicaciones del clúster 
 
 Las **versiones** nunca necesitan DNS: el nombre identifica una aplicación o una rama, y la versión nueva es otra
 imagen detrás del mismo nombre. Las **ramas** ya van por un comodín (`*.dev…`). Lo único que obligaría a un
-trámite por cada aplicación es que sus nombres de producción cuelguen de `stic.intranet.net`.
+trámite por cada aplicación es que sus nombres de producción cuelguen de `example.com`.
 
 | Opción | Cómo queda | Cuándo conviene |
 |---|---|---|
-| **B. Un subdominio con comodín** (recomendada) | `*.apps.intranet.net`: las aplicaciones quedan en `hola-k8s.apps.intranet.net`. Un solo trámite | Siempre que se espere más de un puñado de aplicaciones. Hay que cambiar `PROD_DOMAIN` en la plantilla |
-| A. Un registro por aplicación | `hola-k8s.stic.intranet.net`, uno por cada aplicación | Pocas aplicaciones y un nombre sin `apps.` |
+| **B. Un subdominio con comodín** (recomendada) | `*.apps.example.com`: las aplicaciones quedan en `hola-k8s.apps.example.com`. Un solo trámite | Siempre que se espere más de un puñado de aplicaciones. Hay que cambiar `PROD_DOMAIN` en la plantilla |
+| A. Un registro por aplicación | `hola-k8s.example.com`, uno por cada aplicación | Pocas aplicaciones y un nombre sin `apps.` |
 
-Un comodín directamente en `stic.intranet.net` (`*.stic.intranet.net`) es mala idea: tapa errores de nombres y
-suele estar prohibido. Una aplicación que necesite un nombre propio (por ejemplo `facturas.stic.intranet.net`)
+Un comodín directamente en `example.com` (`*.example.com`) es mala idea: tapa errores de nombres y
+suele estar prohibido. Una aplicación que necesite un nombre propio (por ejemplo `facturas.example.com`)
 puede seguir teniéndolo: se pide su registro y ese proyecto sobrescribe `PROD_DOMAIN` en su `.gitlab-ci.yml`.
 
 Con un comodín, cualquier nombre bajo `apps.` llega a Traefik aunque la aplicación no exista (responde 404). Es
@@ -123,7 +123,7 @@ pipeline a partir de tres sitios. Si un dominio cambia, se cambia en su sitio y 
 
 | Nombre | Dónde se define | Qué hacer si cambia |
 |---|---|---|
-| Entornos de rama (`<entorno>-<app>.dev.intranet.net`) | `DEV_DOMAIN` en la plantilla | Cambiar la variable. Los entornos nuevos salen con el dominio nuevo; los que ya existían lo conservan hasta su siguiente push o hasta caducar (7 días) |
+| Entornos de rama (`<entorno>-<app>.dev.example.com`) | `DEV_DOMAIN` en la plantilla | Cambiar la variable. Los entornos nuevos salen con el dominio nuevo; los que ya existían lo conservan hasta su siguiente push o hasta caducar (7 días) |
 | Producción (`<app>.<dominio>`) | `PROD_DOMAIN` en la plantilla (o en el `.gitlab-ci.yml` de un proyecto, para un nombre propio) | Cambiar la variable. Vale en el siguiente `deploy_prod` |
 | KubeDev | `host` de `kdev/k8s/ingress.yaml`, `OAUTH_REDIRECT_URI` del Deployment y el Redirect URI de la aplicación en GitLab | Los tres tienen que coincidir |
 
@@ -138,15 +138,15 @@ con un dominio concreto, hay que ajustarlo.
 las variables de inicio de sesión a la dirección definitiva:
 
 ```bash
-# kdev/k8s/ingress.yaml: comprueba que `host:` es kdev.intranet.net (o el nombre real)
+# kdev/k8s/ingress.yaml: comprueba que `host:` es kdev.example.com (o el nombre real)
 kubectl apply -f kdev/k8s/ingress.yaml
 kubectl -n kdev set env deploy/kdev \
-  OAUTH_REDIRECT_URI=https://kdev.intranet.net/api/auth/callback COOKIE_SECURE=true
+  OAUTH_REDIRECT_URI=https://kdev.example.com/api/auth/callback COOKIE_SECURE=true
 kubectl -n kdev rollout status deploy/kdev
 ```
 
 Y en GitLab, *Admin Area, Applications*, la aplicación **kdev**: cambia (o añade) el **Redirect URI** a
-`https://kdev.intranet.net/api/auth/callback`. Tiene que coincidir **exactamente** con
+`https://kdev.example.com/api/auth/callback`. Tiene que coincidir **exactamente** con
 `OAUTH_REDIRECT_URI`, o el inicio de sesión falla con «redirect_uri_mismatch».
 
 > Mientras accedas por el NodePort de pruebas (HTTP), `COOKIE_SECURE` debe seguir en `false`: el navegador no
@@ -158,11 +158,11 @@ Y en GitLab, *Admin Area, Applications*, la aplicación **kdev**: cambia (o aña
 # en desarrollo-k8s/plantillas, k8s-review.yml
 variables:
   ENV_SCHEME: "https"                    # el enlace «Open» de GitLab
-  PROD_DOMAIN: apps.intranet.net    # solo si se pidió el comodín *.apps (opción B)
+  PROD_DOMAIN: apps.example.com    # solo si se pidió el comodín *.apps (opción B)
 ```
 
-Con el cambio de `PROD_DOMAIN`, la aplicación de ejemplo pasa de `hola-k8s.stic.intranet.net` a
-`hola-k8s.apps.intranet.net` en su **siguiente** despliegue de producción. Haz el cambio cuando el comodín
+Con el cambio de `PROD_DOMAIN`, la aplicación de ejemplo pasa de `hola-k8s.example.com` a
+`hola-k8s.apps.example.com` en su **siguiente** despliegue de producción. Haz el cambio cuando el comodín
 ya resuelva, no antes, o `deploy_prod` publicaría un nombre que aún no abre.
 
 **c) Enlaces de KubeDev.** Los enlaces a los entornos usan el esquema de la variable `ENV_SCHEME` del Deployment
@@ -186,11 +186,11 @@ export VIP=[IP del VIP]                 # opcional: avisa si un nombre resuelve 
 export TRAEFIK=[IP de un nodo]          # opcional: añade la prueba «directo», que separa red de aplicación
 export CA=[fichero PEM de la CA interna]   # opcional: para validar el certificado HTTPS
 bash plataforma/dns/comprobar.sh
-bash plataforma/dns/comprobar.sh hola-k8s.stic.intranet.net     # añade los nombres que quieras
+bash plataforma/dns/comprobar.sh hola-k8s.example.com     # añade los nombres que quieras
 ```
 
-Por defecto prueba `kdev.intranet.net` y **un nombre inventado de los entornos**
-(`comprobacion-NNNN.dev.intranet.net`). Ese nombre no existe como entorno a propósito:
+Por defecto prueba `kdev.example.com` y **un nombre inventado de los entornos**
+(`comprobacion-NNNN.dev.example.com`). Ese nombre no existe como entorno a propósito:
 
 | Resultado | Qué significa |
 |---|---|
@@ -204,7 +204,7 @@ Por defecto prueba `kdev.intranet.net` y **un nombre inventado de los entornos**
 
 El orden lógico de la validación: primero el DNS (que resuelvan los tres tipos de nombre), después el A10
 (el nombre inventado debe dar 404), después el certificado, y al final el navegador: abrir
-`https://kdev.intranet.net`, iniciar sesión y pulsar el enlace de un entorno.
+`https://kdev.example.com`, iniciar sesión y pulsar el enlace de un entorno.
 
 ### Un 404 solo en las rutas `/api`
 
@@ -217,7 +217,7 @@ kubectl get ingressroute -A -o jsonpath='{range .items[*]}{.metadata.namespace}/
 
 Traefik da a cada ruta una prioridad igual a la **longitud de su regla** y gana la mayor. Una regla como
 ``PathPrefix(`/api`) || PathPrefix(`/dashboard`)`` (46 caracteres, la del panel) le gana a una aplicación cuya ruta
-sea ``Host(`kdev.intranet.net`) && PathPrefix(`/`)`` (44), y además deja el panel interno de Traefik accesible
+sea ``Host(`kdev.example.com`) && PathPrefix(`/`)`` (44), y además deja el panel interno de Traefik accesible
 bajo cualquier nombre. El arreglo de fondo es atar esa ruta a su nombre con `Host(...)`. El rápido, para una
 aplicación concreta:
 
@@ -227,14 +227,14 @@ kubectl -n <namespace> annotate ingress <nombre> traefik.ingress.kubernetes.io/r
 
 ## 4. Producción: la segunda petición
 
-Lo de las ramas (`*.dev.intranet.net`) y KubeDev (`kdev.intranet.net`) ya está. Falta el nombre de **producción**.
+Lo de las ramas (`*.dev.example.com`) y KubeDev (`kdev.example.com`) ya está. Falta el nombre de **producción**.
 
 ### Qué certificado hace falta, según la opción
 
-| | Opción A: `<app>.intranet.net` | Opción B: `<app>.apps.intranet.net` |
+| | Opción A: `<app>.example.com` | Opción B: `<app>.apps.example.com` |
 |---|---|---|
-| DNS | **Un registro por aplicación nueva** | **Un solo comodín**, `*.apps.intranet.net` |
-| Certificado | Lo cubre el comodín `*.intranet.net` que ya usan las demás aplicaciones | Hay que **añadir** `*.apps.intranet.net`: un comodín solo cubre un nivel |
+| DNS | **Un registro por aplicación nueva** | **Un solo comodín**, `*.apps.example.com` |
+| Certificado | Lo cubre el comodín `*.example.com` que ya usan las demás aplicaciones | Hay que **añadir** `*.apps.example.com`: un comodín solo cubre un nivel |
 | Riesgo | Chocar con el nombre de una aplicación de la casa (`APP_NAME` solo es único dentro de `desarrollo-k8s`) | Ninguno de ese tipo |
 | Trámite por aplicación nueva | Sí | No |
 
@@ -246,29 +246,29 @@ La recomendación sigue siendo la **B**: el único coste es un certificado, una 
 >
 > Para publicar las aplicaciones de desarrollo en producción necesitamos:
 >
-> 1. **DNS:** un registro `*.apps.intranet.net` (A, o alias hacia el nombre del balanceador, como los demás) apuntando al **mismo VIP del A10**
->    que ya usan `*.dev.intranet.net` y `kdev.intranet.net`.
-> 2. **A10:** añadir `*.apps.intranet.net` al servicio virtual existente, con un **certificado que cubra `*.apps.intranet.net`**
->    (el comodín `*.intranet.net` actual no lo cubre: es de un solo nivel). Mismos servidores reales (los nodos, puerto 80),
+> 1. **DNS:** un registro `*.apps.example.com` (A, o alias hacia el nombre del balanceador, como los demás) apuntando al **mismo VIP del A10**
+>    que ya usan `*.dev.example.com` y `kdev.example.com`.
+> 2. **A10:** añadir `*.apps.example.com` al servicio virtual existente, con un **certificado que cubra `*.apps.example.com`**
+>    (el comodín `*.example.com` actual no lo cubre: es de un solo nivel). Mismos servidores reales (los nodos, puerto 80),
 >    la misma comprobación de salud y conservar la cabecera `Host`.
 >
-> Con esto, cada aplicación nueva tendrá su dirección (`<app>.apps.intranet.net`) sin pedir nada más. Avisadnos al terminar para validarlo.
+> Con esto, cada aplicación nueva tendrá su dirección (`<app>.apps.example.com`) sin pedir nada más. Avisadnos al terminar para validarlo.
 
 ### El cambio, paso a paso
 
 1. **Redes** aplica la petición.
 2. **Valida el nombre** antes de tocar nada de nuestro lado: `bash plataforma/dns/comprobar.sh` (prueba un nombre inventado bajo
    `apps.`: debe dar **404 de Traefik**). Si da `FALLA`, no sigas.
-3. **Cambia la plantilla** (`desarrollo-k8s/plantillas`, `k8s-review.yml`): `PROD_DOMAIN: apps.intranet.net`.
+3. **Cambia la plantilla** (`desarrollo-k8s/plantillas`, `k8s-review.yml`): `PROD_DOMAIN: apps.example.com`.
 4. **Pipeline nuevo en `main`** de `hola-k8s` (commit nuevo o *Run pipeline*; *Retry* no sirve) y pulsar `deploy_prod`.
    Helm cambia el host del Ingress en el mismo entorno, sin recrearlo.
-5. **Comprueba** `https://hola-k8s.apps.intranet.net`. **El nombre antiguo (`hola-k8s.stic.intranet.net`) deja de funcionar de inmediato.**
+5. **Comprueba** `https://hola-k8s.apps.example.com`. **El nombre antiguo (`hola-k8s.example.com`) deja de funcionar de inmediato.**
    Avisa a quien lo use antes de hacerlo.
 6. **Actualiza las direcciones escritas** (ver abajo).
 
 ### Dónde hay direcciones de producción escritas
 
-Hay que cambiar `<app>.stic.intranet.net` por `<app>.apps.intranet.net` en: el manual de KubeDev (`entornos.md`, `produccion.md`,
+Hay que cambiar `<app>.example.com` por `<app>.apps.example.com` en: el manual de KubeDev (`entornos.md`, `produccion.md`,
 `referencia.md`), la wiki (`referencia.md` y `flujo-cicd.md`), la presentación y el README. Se hace **después** del paso 5,
 no antes: hasta entonces la dirección real sigue siendo la antigua.
 

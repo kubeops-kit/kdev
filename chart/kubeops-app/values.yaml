@@ -6,7 +6,7 @@ app: ""               # pipeline: nombre de la app (APP_NAME)
 replicaCount: 1       # pipeline: en producción se sube con --set
 
 image:
-  registry: harbor.stic.intranet.net/apps   # pipeline
+  registry: harbor.example.com/apps   # pipeline
   tag: ""                                    # pipeline: SHA del commit
 
 ingress:

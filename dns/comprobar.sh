@@ -8,13 +8,13 @@
 #
 # Uso:
 #   bash comprobar.sh                                  # nombres de prueba: kdev, y uno inventado de ramas y otro de producción
-#   bash comprobar.sh hola-k8s.stic.intranet.net ...   # los que indiques (se añaden a los de prueba)
+#   bash comprobar.sh hola-k8s.example.com ...   # los que indiques (se añaden a los de prueba)
 #
 # Variables (todas opcionales):
 #   VIP        IP del balanceador A10: avisa si el nombre resuelve a otra distinta
 #   TRAEFIK    IP de un nodo del clúster: añade la prueba «directo», que separa red de aplicación
 #   CA         fichero PEM de la CA interna, para validar el certificado HTTPS
-#   DOMAIN_PROD  (apps.intranet.net)   subdominio de producción; si usas otro, indícalo
+#   DOMAIN_PROD  (apps.example.com)   subdominio de producción; si usas otro, indícalo
 #   PORT_HTTP  (80)   PORT_HTTPS  (443)
 #   SOLO_LOS_MIOS=1   no añade los nombres de prueba: comprueba únicamente los que pases como argumento
 #
@@ -28,9 +28,9 @@ PORT_HTTPS="${PORT_HTTPS:-443}"
 VIP="${VIP:-}"
 TRAEFIK="${TRAEFIK:-}"
 CA="${CA:-}"
-DOMAIN_DEV="${DOMAIN_DEV:-dev.intranet.net}"
-DOMAIN_KDEV="${DOMAIN_KDEV:-kdev.intranet.net}"
-DOMAIN_PROD="${DOMAIN_PROD:-apps.intranet.net}"
+DOMAIN_DEV="${DOMAIN_DEV:-dev.example.com}"
+DOMAIN_KDEV="${DOMAIN_KDEV:-kdev.example.com}"
+DOMAIN_PROD="${DOMAIN_PROD:-apps.example.com}"
 command -v curl >/dev/null || { echo "ERROR: falta curl" >&2; exit 2; }
 command -v getent >/dev/null || { echo "ERROR: falta getent" >&2; exit 2; }
 command -v timeout >/dev/null || { echo "ERROR: falta timeout (paquete coreutils)" >&2; exit 2; }

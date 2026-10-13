@@ -2,7 +2,7 @@
 #   kubectl -n ci-deploy create secret generic runner-token \
 #     --from-literal=runner-token='glrt-YYYY' --from-literal=runner-registration-token=''
 image:
-  registry: harbor.stic.intranet.net
+  registry: harbor.example.com
   image: ci/gitlab-runner
   tag: alpine-v17.6.0
 imagePullPolicy: IfNotPresent
@@ -25,8 +25,8 @@ runners:
         service_account = "ci-deploy-job"
         automount_service_account_token = true
         privileged = false
-        image = "harbor.stic.intranet.net/ci/helm-kubectl:CAMBIAR"
-        helper_image = "harbor.stic.intranet.net/ci/gitlab-runner-helper:x86_64-v17.6.0"
+        image = "harbor.example.com/ci/helm-kubectl:CAMBIAR"
+        helper_image = "harbor.example.com/ci/gitlab-runner-helper:x86_64-v17.6.0"
         pull_policy = ["if-not-present"]
         cpu_request = "100m"
         cpu_limit = "500m"

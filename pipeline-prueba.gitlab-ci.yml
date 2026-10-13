@@ -5,7 +5,7 @@ stages: [test]
 build_test:
   stage: test
   tags: [k8s-build]
-  image: harbor.stic.intranet.net/base/alpine:3.20
+  image: harbor.example.com/base/alpine:3.20
   script:
     - echo "hola desde $(hostname)"
     - id
@@ -14,12 +14,12 @@ build_test:
     # El clúster no tiene internet
     - 'wget -q -T 5 -O /dev/null http://example.com && { echo "ERROR: hay internet"; exit 1; } || echo "OK: sin internet"'
     # Harbor debe ser alcanzable (lo necesitará Kaniko)
-    - wget -q -T 5 --no-check-certificate -O - https://harbor.stic.intranet.net/api/v2.0/ping
+    - wget -q -T 5 --no-check-certificate -O - https://harbor.example.com/api/v2.0/ping
 
 deploy_test:
   stage: test
   tags: [k8s-deploy]
-  image: harbor.stic.intranet.net/ci/helm-kubectl:1.36.0
+  image: harbor.example.com/ci/helm-kubectl:1.36.0
   script:
     - kubectl version --client
     - helm version --short

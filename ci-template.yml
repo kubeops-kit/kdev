@@ -13,10 +13,10 @@
 stages: [.pre, build, deploy, cleanup]
 
 variables:
-  HARBOR: harbor.stic.intranet.net
+  HARBOR: harbor.example.com
   HARBOR_PROJECT: apps
-  DEV_DOMAIN: dev.intranet.net
-  PROD_DOMAIN: stic.intranet.net     # pasará a apps.intranet.net cuando exista el comodín *.apps (ver plataforma/dns)
+  DEV_DOMAIN: dev.example.com
+  PROD_DOMAIN: example.com     # pasará a apps.example.com cuando exista el comodín *.apps (ver plataforma/dns)
   ENV_SCHEME: "https"      # el A10 sirve los entornos por HTTPS; solo afecta al enlace «Open» de GitLab
   CHART_VERSION: "0.1.0"
   IMAGE_TAG: $CI_COMMIT_SHORT_SHA
@@ -24,7 +24,7 @@ variables:
 lint_dockerfiles:
   stage: .pre
   tags: [k8s-build]
-  image: harbor.stic.intranet.net/base/alpine:3.20
+  image: harbor.example.com/base/alpine:3.20
   rules:
     - if: $CI_COMMIT_BRANCH
   script:
@@ -39,7 +39,7 @@ lint_dockerfiles:
   stage: build
   tags: [k8s-build]
   image:
-    name: harbor.stic.intranet.net/ci/kaniko:v1.23.2-debug   # variante -debug (lleva shell)
+    name: harbor.example.com/ci/kaniko:v1.23.2-debug   # variante -debug (lleva shell)
     entrypoint: [""]
   rules:
     - if: $CI_COMMIT_BRANCH
@@ -79,7 +79,7 @@ build_back:
 
 .deploy:
   tags: [k8s-deploy]
-  image: harbor.stic.intranet.net/ci/helm-kubectl:1.36.0
+  image: harbor.example.com/ci/helm-kubectl:1.36.0
   script:
     - |
       cat <<EOF | kubectl create -f - || true
@@ -165,7 +165,7 @@ deploy_review:
 stop_review:
   stage: cleanup
   tags: [k8s-deploy]
-  image: harbor.stic.intranet.net/ci/helm-kubectl:1.36.0
+  image: harbor.example.com/ci/helm-kubectl:1.36.0
   variables:
     GIT_STRATEGY: none      # la rama puede estar ya borrada
   rules:

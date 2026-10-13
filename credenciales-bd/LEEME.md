@@ -90,7 +90,7 @@ Alta de un proyecto nuevo, en orden:
 Desde la raíz del paquete, en un equipo que llegue a GitLab:
 
 ```bash
-export GITLAB_URL=http://gitlab.stic.intranet.net         # la dirección de tu GitLab
+export GITLAB_URL=http://gitlab.example.com         # la dirección de tu GitLab
 export GITLAB_TOKEN=...                                     # token de grupo (api); opcional: si no, se pregunta sin mostrarlo
 bash plataforma/credenciales-bd/variables-bd.sh crear desarrollo-k8s/mi-app
 bash plataforma/credenciales-bd/variables-bd.sh listar desarrollo-k8s/mi-app
@@ -140,11 +140,11 @@ enseña **si** las credenciales llegan, nunca su valor.
 
    ```bash
    curl -s -H 'Host: <dirección-del-entorno>' http://<IP-de-Traefik>/api/config
-   # {"entorno":"review","db_host":"bd-desarrollo.stic.intranet.net","db_user_definido":true,"db_password_definida":true}
+   # {"entorno":"review","db_host":"bd-desarrollo.example.com","db_user_definido":true,"db_password_definida":true}
    ```
 
 5. **Producción.** Mergea, pulsa `deploy_prod` y repite el `curl` con la dirección de producción: debe decir
-   `"entorno":"production"` y `"db_host":"bd-produccion.stic.intranet.net"`.
+   `"entorno":"production"` y `"db_host":"bd-produccion.example.com"`.
 6. **Los secretos son distintos en cada entorno**, sin enseñar ningún valor. Compara las huellas:
 
    ```bash

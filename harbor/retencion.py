@@ -6,7 +6,7 @@ Es de solo lectura sobre las imágenes: lanza siempre una ejecución en modo sim
 resultado. No hay ninguna opción para borrar de verdad; eso se hace a mano desde la interfaz de Harbor.
 
 Uso:
-  python3 retencion.py --harbor https://harbor.stic.intranet.net --ca ca-harbor.pem --user admin
+  python3 retencion.py --harbor https://harbor.example.com --ca ca-harbor.pem --user admin
   python3 retencion.py ... --ultima        # analiza la última ejecución (por ejemplo una simulación lanzada desde la interfaz)
   python3 retencion.py --solo-en-uso       # solo lista las imágenes que usan ahora los pods de apps (no necesita Harbor)
   python3 retencion.py ... --existen       # comprueba que cada imagen en uso SIGUE existiendo en Harbor (úsalo tras una limpieza real)
@@ -215,7 +215,7 @@ def check_in_use(project, per_repo):
 
 def main():
     p = argparse.ArgumentParser(description="Simula la retención de Harbor y comprueba las imágenes en uso.")
-    p.add_argument("--harbor", default="https://harbor.stic.intranet.net")
+    p.add_argument("--harbor", default="https://harbor.example.com")
     p.add_argument("--project", default="apps")
     p.add_argument("--user", default="admin")
     p.add_argument("--ca", help="fichero PEM con la CA de Harbor")

@@ -130,7 +130,7 @@ El orden y el detalle están en `LEEME.md`; resumido:
 ```bash
 bash proteccion.sh aplicar                       # SA y RBAC del runner de producción + políticas en aviso
 bash proteccion.sh crear-runner-gitlab           # (o a mano en GitLab, paso 1.4)
-bash proteccion.sh runner-prod --gitlab-url http://gitlab.intranet.net/
+bash proteccion.sh runner-prod --gitlab-url http://gitlab.example.com/
 bash proteccion.sh migrar --aplicar              # etiquetas y RoleBinding del runner de producción
 # publicar la plantilla nueva y comprobar un deploy_prod con el runner protegido
 bash proteccion.sh migrar --aplicar --quitar-antiguos

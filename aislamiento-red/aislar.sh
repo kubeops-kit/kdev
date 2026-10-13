@@ -29,9 +29,9 @@ EXTRA_INGRESS_NS="${EXTRA_INGRESS_NS:-}"
 POD_SVC_CIDR="${POD_SVC_CIDR:-172.25.0.0/16}"
 EXTRA_EXCEPT="${EXTRA_EXCEPT:-}"
 INCLUIR_PROD="${INCLUIR_PROD:-0}"
-IMG="${IMG:-harbor.stic.intranet.net/base/alpine:3.20}"
+IMG="${IMG:-harbor.example.com/base/alpine:3.20}"
 CRON_NS=aislamiento
-CRON_IMG="${CRON_IMG:-harbor.stic.intranet.net/ci/helm-kubectl:1.36.0}"
+CRON_IMG="${CRON_IMG:-harbor.example.com/ci/helm-kubectl:1.36.0}"
 AQUI="$(cd "$(dirname "$0")" && pwd)"
 
 k() { "$KUBECTL" "$@"; }

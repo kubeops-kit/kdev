@@ -5,7 +5,7 @@
 # Requiere: skopeo
 set -euo pipefail
 
-HARBOR="harbor.stic.intranet.net"
+HARBOR="harbor.example.com"
 DIR="./images"
 CERTDIR=""            # directorio con la CA de Harbor (ca.crt) si no está en el sistema
 

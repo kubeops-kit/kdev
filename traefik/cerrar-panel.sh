@@ -8,17 +8,17 @@
 # Uso:
 #   export TRAEFIK=<IP de un nodo>                       # obligatoria: las pruebas van contra Traefik directamente
 #   bash cerrar-panel.sh diagnosticar                    # no cambia nada: enseña la ruta y si está expuesta
-#   bash cerrar-panel.sh cerrar traefik.intranet.net     # añade Host(...) a la regla, comprueba y revierte si falla
+#   bash cerrar-panel.sh cerrar traefik.example.com     # añade Host(...) a la regla, comprueba y revierte si falla
 #   bash cerrar-panel.sh revertir                        # vuelve a la regla original
 #
 # Variables opcionales: NS (traefik)  NAME (traefik-dashboard)  PORT_HTTP (80)  PORT_HTTPS (443)
-#                       KDEV_HOST (kdev.intranet.net)  ESPERA (segundos que se espera a que Traefik recargue; 4)
+#                       KDEV_HOST (kdev.example.com)  ESPERA (segundos que se espera a que Traefik recargue; 4)
 # Necesita kubectl, curl y python3. El script NO reinicia Traefik.
 set -uo pipefail
 
 NS="${NS:-traefik}"; NAME="${NAME:-traefik-dashboard}"
 PORT_HTTP="${PORT_HTTP:-80}"; PORT_HTTPS="${PORT_HTTPS:-443}"
-KDEV_HOST="${KDEV_HOST:-kdev.intranet.net}"; ESPERA="${ESPERA:-4}"
+KDEV_HOST="${KDEV_HOST:-kdev.example.com}"; ESPERA="${ESPERA:-4}"
 ORIGINAL='PathPrefix(`/api`) || PathPrefix(`/dashboard`)'
 COPIA="${COPIA:-/tmp/traefik-dashboard-regla-original.txt}"
 
@@ -61,7 +61,7 @@ cuerpo_es_api_traefik() { # host -> 0 si /api/rawdata devuelve el JSON interno d
 # 401 y 403 cuentan: el panel responde, solo que pide credenciales (por ejemplo, con un middleware de autenticación)
 abre() { case "$1" in 200|301|302|303|307|308|401|403) return 0 ;; *) return 1 ;; esac; }
 
-nombre_inventado="nombre-inventado-$RANDOM.prueba.intranet.net"
+nombre_inventado="nombre-inventado-$RANDOM.prueba.example.com"
 
 estado() {
   echo "Ruta $NS/$NAME"
@@ -98,13 +98,13 @@ case "$cmd" in
     echo "  KubeDev ($KDEV_HOST): /api/health -> HTTP $(codigo "$KDEV_HOST" /api/health)"
     echo
     echo "Cómo abres el panel? Pruébalo con el nombre que uses, por ejemplo:"
-    echo "  curl -sk -o /dev/null -w '%{http_code}\n' -H 'Host: traefik.intranet.net' http://$TRAEFIK/dashboard/"
+    echo "  curl -sk -o /dev/null -w '%{http_code}\n' -H 'Host: traefik.example.com' http://$TRAEFIK/dashboard/"
     exit $rc
     ;;
 
   cerrar)
     host="${2:-}"
-    [ -n "$host" ] || { echo "Falta el nombre con el que se abre el panel (por ejemplo traefik.intranet.net)." >&2; exit 1; }
+    [ -n "$host" ] || { echo "Falta el nombre con el que se abre el panel (por ejemplo traefik.example.com)." >&2; exit 1; }
     case "$host" in *[!A-Za-z0-9.-]*|.*|*..*) echo "ERROR: «$host» no parece un nombre de host válido." >&2; exit 1 ;; esac
     actual="$(regla_actual)" || exit 3
     case "$actual" in *"Host("*) echo "La regla ya incluye un Host:"; echo "  $actual"; echo "Nada que hacer."; exit 0 ;; esac
