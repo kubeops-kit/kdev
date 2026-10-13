@@ -1,0 +1,89 @@
+# Barreras de seguridad de los runners de despliegue. Cada uno solo puede ESCRIBIR en su tipo de entorno:
+#   - runner de ramas      (ci-deploy:ci-deploy-job)            -> namespaces app-<app>-review-<slug>
+#   - runner de producción (ci-deploy-prod:ci-deploy-prod-job)  -> namespaces app-<app>-prod
+# Un namespace se identifica por su NOMBRE y por su ETIQUETA kubeops/env, y las dos tienen que coincidir.
+# El de ramas jamás puede tocar producción, aunque alguien escriba su propio trabajo con ese runner.
+# ESTADO INICIAL: modo aviso (Warn). No bloquea nada; el cliente ve «Warning: Validation failed for
+# ValidatingAdmissionPolicy ...» cuando la política habría bloqueado. Se activa con proteccion.sh enforce.
+# Alcance: cada política solo evalúa las peticiones de su ServiceAccount, así que no afecta al resto del clúster.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: ci-deploy-ramas
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["*"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["*"]
+  matchConditions:
+    - name: solo-runner-de-ramas
+      expression: "request.userInfo.username == 'system:serviceaccount:ci-deploy:ci-deploy-job'"
+  validations:
+    - expression: >-
+        request.resource.resource == 'namespaces'
+        ? request.name.matches('^app-[a-z0-9-]+-review-[a-z0-9-]+-[a-z0-9]{6}$')
+        : (request.namespace.matches('^app-[a-z0-9-]+-review-[a-z0-9-]+-[a-z0-9]{6}$') &&
+           has(namespaceObject.metadata.labels) &&
+           'kubeops/env' in namespaceObject.metadata.labels &&
+           namespaceObject.metadata.labels['kubeops/env'] == 'review')
+      message: "El runner de ramas solo puede escribir en entornos de rama (app-<app>-review-<entorno>)"
+    - expression: >-
+        request.resource.resource != 'namespaces' || request.operation == 'DELETE' ||
+        (has(object.metadata.labels) &&
+         'pod-security.kubernetes.io/enforce' in object.metadata.labels &&
+         object.metadata.labels['pod-security.kubernetes.io/enforce'] in ['baseline', 'restricted'] &&
+         'kubeops/env' in object.metadata.labels &&
+         object.metadata.labels['kubeops/env'] == 'review')
+      message: "Los namespaces de rama deben llevar kubeops/env=review y pod-security.kubernetes.io/enforce=baseline|restricted"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: ci-deploy-ramas
+spec:
+  policyName: ci-deploy-ramas
+  validationActions: [Warn, Audit]   # MODO AVISO. «proteccion.sh enforce» lo cambia a [Deny] cuando la batería sale limpia
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: ci-deploy-produccion
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["*"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["*"]
+  matchConditions:
+    - name: solo-runner-de-produccion
+      expression: "request.userInfo.username == 'system:serviceaccount:ci-deploy-prod:ci-deploy-prod-job'"
+  validations:
+    - expression: >-
+        request.resource.resource == 'namespaces'
+        ? request.name.matches('^app-[a-z0-9-]+-prod$')
+        : (request.namespace.matches('^app-[a-z0-9-]+-prod$') &&
+           has(namespaceObject.metadata.labels) &&
+           'kubeops/env' in namespaceObject.metadata.labels &&
+           namespaceObject.metadata.labels['kubeops/env'] == 'prod')
+      message: "El runner de producción solo puede escribir en entornos de producción (app-<app>-prod)"
+    - expression: >-
+        request.resource.resource != 'namespaces' || request.operation == 'DELETE' ||
+        (has(object.metadata.labels) &&
+         'pod-security.kubernetes.io/enforce' in object.metadata.labels &&
+         object.metadata.labels['pod-security.kubernetes.io/enforce'] in ['baseline', 'restricted'] &&
+         'kubeops/env' in object.metadata.labels &&
+         object.metadata.labels['kubeops/env'] == 'prod')
+      message: "Los namespaces de producción deben llevar kubeops/env=prod y pod-security.kubernetes.io/enforce=baseline|restricted"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: ci-deploy-produccion
+spec:
+  policyName: ci-deploy-produccion
+  validationActions: [Warn, Audit]   # MODO AVISO. «proteccion.sh enforce» lo cambia a [Deny] cuando la batería sale limpia

@@ -1,0 +1,44 @@
+# Pipeline de prueba de la plataforma. Copiar como .gitlab-ci.yml en un proyecto vacío
+# dentro del grupo desarrollo-k8s.
+stages: [test]
+
+build_test:
+  stage: test
+  tags: [k8s-build]
+  image: harbor.stic.intranet.net/base/alpine:3.20
+  script:
+    - echo "hola desde $(hostname)"
+    - id
+    # El job de build NO debe tener acceso a la API de Kubernetes
+    - 'ls /var/run/secrets/kubernetes.io/serviceaccount 2>/dev/null && { echo "ERROR: hay token de ServiceAccount"; exit 1; } || echo "OK: sin token de ServiceAccount"'
+    # El clúster no tiene internet
+    - 'wget -q -T 5 -O /dev/null http://example.com && { echo "ERROR: hay internet"; exit 1; } || echo "OK: sin internet"'
+    # Harbor debe ser alcanzable (lo necesitará Kaniko)
+    - wget -q -T 5 --no-check-certificate -O - https://harbor.stic.intranet.net/api/v2.0/ping
+
+deploy_test:
+  stage: test
+  tags: [k8s-deploy]
+  image: harbor.stic.intranet.net/ci/helm-kubectl:1.36.0
+  script:
+    - kubectl version --client
+    - helm version --short
+    - NS="app-citest-$CI_PIPELINE_ID"
+    - |
+      cat <<EOF | kubectl create -f -
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: $NS
+        labels:
+          pod-security.kubernetes.io/enforce: baseline
+      EOF
+    - kubectl -n "$NS" create rolebinding ci-deploy --clusterrole=ci-deploy-app --serviceaccount=ci-deploy:ci-deploy-job
+    - sleep 3
+    - kubectl -n "$NS" create configmap prueba --from-literal=a=b
+    - kubectl -n "$NS" get configmap prueba
+    # Esto DEBE fallar; el '!' hace que el job pase si falla
+    - "! kubectl -n kube-system get secrets"
+    - kubectl delete ns "$NS"
+  after_script:
+    - kubectl delete ns "app-citest-$CI_PIPELINE_ID" --ignore-not-found --wait=false || true

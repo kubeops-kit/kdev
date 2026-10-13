@@ -1,0 +1,40 @@
+# Runner de despliegue a PRODUCCIÓN. En GitLab se crea como runner de grupo con:
+#   - tag: k8s-deploy-prod
+#   - «Protected» MARCADO (solo ejecuta trabajos de ramas y etiquetas protegidas)
+#   - «Run untagged jobs» desmarcado
+#
+# helm install runner-deploy-prod ./gitlab-runner-0.71.0.tgz -n ci-deploy-prod -f plataforma/runners/32-runner-deploy-prod-values.yaml
+#   kubectl -n ci-deploy-prod create secret generic runner-token \
+#     --from-literal=runner-token='glrt-ZZZZ' --from-literal=runner-registration-token=''
+image:
+  registry: harbor.stic.intranet.net
+  image: ci/gitlab-runner
+  tag: alpine-v17.6.0
+imagePullPolicy: IfNotPresent
+
+gitlabUrl: http://<GITLAB_HOST>/     # CAMBIAR
+concurrent: 1                        # un despliegue a producción a la vez
+checkInterval: 5
+rbac:
+  create: true
+metrics:
+  enabled: false
+
+runners:
+  secret: runner-token
+  config: |
+    [[runners]]
+      executor = "kubernetes"
+      [runners.kubernetes]
+        namespace = "ci-deploy-prod"
+        service_account = "ci-deploy-prod-job"
+        automount_service_account_token = true
+        privileged = false
+        image = "harbor.stic.intranet.net/ci/helm-kubectl:1.36.0"
+        helper_image = "harbor.stic.intranet.net/ci/gitlab-runner-helper:x86_64-v17.6.0"
+        pull_policy = ["if-not-present"]
+        cpu_request = "100m"
+        cpu_limit = "500m"
+        memory_request = "128Mi"
+        memory_limit = "512Mi"
+        poll_timeout = 600

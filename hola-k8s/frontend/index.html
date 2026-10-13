@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>hola-k8s</title></head>
+<body style="font-family: sans-serif; max-width: 40rem; margin: 3rem auto;">
+  <h1>hola-k8s</h1>
+  <p>Frontend servido por nginx. Respuesta del backend (<code>/api/hello</code>):</p>
+  <pre id="out">cargando...</pre>
+  <script>
+    fetch('/api/hello')
+      .then(r => r.json())
+      .then(d => { document.getElementById('out').textContent = JSON.stringify(d, null, 2); })
+      .catch(e => { document.getElementById('out').textContent = 'error: ' + e; });
+  </script>
+</body>
+</html>

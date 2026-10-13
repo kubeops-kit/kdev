@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.app }}
+  labels:
+    {{- include "kubeops-app.labels" . | nindent 4 }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  rules:
+    - host: {{ required "ingress.host es obligatorio" .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: {{ .Values.backend.apiPath }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.app }}-back
+                port:
+                  number: {{ .Values.backend.port }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.app }}-front
+                port:
+                  number: {{ .Values.frontend.port }}

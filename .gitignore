@@ -1,0 +1,6 @@
+# Estado local y secretos generados por los scripts (p. ej. proteccion.sh)
+estado/
+**/estado/
+*.token
+*.pem
+.env

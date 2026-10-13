@@ -1,0 +1,64 @@
+# Diseño: el SA de deploy NO tiene lectura de secretos a nivel de clúster.
+# - A nivel de clúster solo puede: gestionar namespaces, y CREAR (no modificar/borrar)
+#   quotas, limitranges y rolebindings.
+# - Dentro de cada namespace app-* recibe el rol ci-deploy-app mediante un RoleBinding
+#   que crea el propio pipeline.
+# - La política de admisión (20-admission-policy.yaml) limita TODAS sus escrituras a app-*.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ci-deploy-bootstrap
+rules:
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [create, get, list, watch, delete]
+  - apiGroups: [""]
+    resources: [resourcequotas, limitranges]
+    verbs: [create]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [rolebindings]
+    verbs: [create]
+  # Permite crear RoleBindings que apunten SOLO a ci-deploy-app
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [clusterroles]
+    verbs: [bind]
+    resourceNames: [ci-deploy-app, kdev-reader]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ci-deploy-bootstrap
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ci-deploy-bootstrap
+subjects:
+  - kind: ServiceAccount
+    name: ci-deploy-job
+    namespace: ci-deploy
+---
+# Permisos DENTRO de un namespace app-* (se usa con RoleBinding, nunca ClusterRoleBinding).
+# Sin quotas, limitranges ni rolebindings: no puede quitarse sus propios límites.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ci-deploy-app
+rules:
+  - apiGroups: [""]
+    resources: [services, configmaps, secrets, serviceaccounts]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch, delete]
+  - apiGroups: [""]
+    resources: [pods/log, events]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments, replicasets]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [batch]
+    resources: [jobs, cronjobs]
+    verbs: [get, list, watch, create, update, patch, delete]

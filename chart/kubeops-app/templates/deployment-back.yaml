@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.app }}-back
+  labels:
+    {{- include "kubeops-app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: back
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Values.app }}
+      app.kubernetes.io/component: back
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Values.app }}
+        app.kubernetes.io/component: back
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: back
+          image: "{{ .Values.image.registry }}/{{ .Values.app }}-back:{{ required "image.tag es obligatorio" .Values.image.tag }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: {{ .Values.backend.port }}
+          {{- if or .Values.backend.env .Values.backend.secretEnv }}
+          env:
+            {{- range $k, $v := .Values.backend.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            {{- range .Values.backend.secretEnv }}
+            - name: {{ . }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.backend.secretName }}
+                  key: {{ . }}
+            {{- end }}
+          {{- end }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.backend.healthPath }}
+              port: http
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.backend.healthPath }}
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}

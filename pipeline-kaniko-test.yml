@@ -1,0 +1,17 @@
+# Añadir este job al .gitlab-ci.yml del proyecto pipeline-prueba (stage: test)
+kaniko_test:
+  stage: test
+  tags: [k8s-build]
+  image:
+    name: harbor.stic.intranet.net/ci/kaniko:v1.23.2-debug
+    entrypoint: [""]
+  script:
+    - mkdir -p /kaniko/.docker
+    - AUTH=$(printf '%s:%s' "$HARBOR_USER" "$HARBOR_PASS" | base64 | tr -d '\n')
+    - printf '{"auths":{"harbor.stic.intranet.net":{"auth":"%s"}}}' "$AUTH" > /kaniko/.docker/config.json
+    - cat "$HARBOR_CA" >> /kaniko/ssl/certs/additional-ca-cert-bundle.crt
+    - mkdir ctx
+    - |
+      printf 'FROM harbor.stic.intranet.net/base/alpine:3.20\nRUN echo hola > /hola.txt\n' > ctx/Dockerfile
+    - /kaniko/executor --context "$CI_PROJECT_DIR/ctx" --dockerfile "$CI_PROJECT_DIR/ctx/Dockerfile"
+        --destination "harbor.stic.intranet.net/apps/prueba-kaniko:$CI_COMMIT_SHORT_SHA"

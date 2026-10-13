@@ -1,0 +1,6 @@
+# Solo lo propio de la app; el resto (imagen, host, nombre) lo pone el pipeline.
+frontend:
+  port: 80
+backend:
+  port: 3000
+  healthPath: /api/health

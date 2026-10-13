@@ -1,0 +1,199 @@
+# Repo de plataforma (p. ej. desarrollo-k8s/plantillas) -> k8s-review.yml
+# En cada proyecto de la app, el .gitlab-ci.yml queda así:
+#   include:
+#     - project: desarrollo-k8s/plantillas
+#       file: k8s-review.yml
+#   variables:
+#     APP_NAME: miapp          # máx. 34 caracteres, minúsculas, sin guiones bajos
+#
+# Variables de grupo (Settings > CI/CD > Variables de desarrollo-k8s):
+#   HARBOR_USER, HARBOR_PASS (masked), HARBOR_CA (tipo File),
+#   DB_USER / DB_PASSWORD con scope "review/*" y otras con scope "production"
+
+stages: [.pre, build, deploy, cleanup]
+
+variables:
+  HARBOR: harbor.stic.intranet.net
+  HARBOR_PROJECT: apps
+  DEV_DOMAIN: dev.intranet.net
+  PROD_DOMAIN: stic.intranet.net     # pasará a apps.intranet.net cuando exista el comodín *.apps (ver plataforma/dns)
+  ENV_SCHEME: "https"      # el A10 sirve los entornos por HTTPS; solo afecta al enlace «Open» de GitLab
+  CHART_VERSION: "0.1.0"
+  IMAGE_TAG: $CI_COMMIT_SHORT_SHA
+
+lint_dockerfiles:
+  stage: .pre
+  tags: [k8s-build]
+  image: harbor.stic.intranet.net/base/alpine:3.20
+  rules:
+    - if: $CI_COMMIT_BRANCH
+  script:
+    - |
+      bad=0
+      for f in $(find . -name 'Dockerfile*' -not -path '*/node_modules/*'); do
+        awk -v h="$HARBOR" 'tolower($1)=="from"{img=$2; if(img ~ /^--/) img=$3; if(index(img,h"/")!=1 && !(tolower(img) in st)){print FILENAME": "$0; bad=1} if(tolower($(NF-1))=="as") st[tolower($NF)]=1} END{exit bad}' "$f" || bad=1
+      done
+      [ "$bad" = 0 ] || { echo "ERROR: todo FROM debe partir de $HARBOR/"; exit 1; }
+
+.build:
+  stage: build
+  tags: [k8s-build]
+  image:
+    name: harbor.stic.intranet.net/ci/kaniko:v1.23.2-debug   # variante -debug (lleva shell)
+    entrypoint: [""]
+  rules:
+    - if: $CI_COMMIT_BRANCH
+  before_script:
+    - mkdir -p /kaniko/.docker
+    - AUTH=$(printf '%s:%s' "$HARBOR_USER" "$HARBOR_PASS" | base64 | tr -d '\n')
+    - printf '{"auths":{"%s":{"auth":"%s"}}}' "$HARBOR" "$AUTH" > /kaniko/.docker/config.json
+    - cat "$HARBOR_CA" >> /kaniko/ssl/certs/additional-ca-cert-bundle.crt
+
+build_front:
+  extends: .build
+  script:
+    - |
+      # Las imágenes que salen de main llevan una segunda etiqueta (main-<commit>) sobre la MISMA imagen.
+      # La retención de Harbor la usa para conservar las versiones de producción más tiempo que las de las ramas.
+      EXTRA=""
+      if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then
+        EXTRA="--destination $HARBOR/$HARBOR_PROJECT/$APP_NAME-front:main-$IMAGE_TAG"
+      fi
+      /kaniko/executor --context "$CI_PROJECT_DIR/frontend" --dockerfile "$CI_PROJECT_DIR/frontend/Dockerfile" \
+        --destination "$HARBOR/$HARBOR_PROJECT/$APP_NAME-front:$IMAGE_TAG" $EXTRA \
+        --cache=true --cache-repo "$HARBOR/$HARBOR_PROJECT/cache"
+
+build_back:
+  extends: .build
+  script:
+    - |
+      # Las imágenes que salen de main llevan una segunda etiqueta (main-<commit>) sobre la MISMA imagen.
+      # La retención de Harbor la usa para conservar las versiones de producción más tiempo que las de las ramas.
+      EXTRA=""
+      if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then
+        EXTRA="--destination $HARBOR/$HARBOR_PROJECT/$APP_NAME-back:main-$IMAGE_TAG"
+      fi
+      /kaniko/executor --context "$CI_PROJECT_DIR/backend" --dockerfile "$CI_PROJECT_DIR/backend/Dockerfile" \
+        --destination "$HARBOR/$HARBOR_PROJECT/$APP_NAME-back:$IMAGE_TAG" $EXTRA \
+        --cache=true --cache-repo "$HARBOR/$HARBOR_PROJECT/cache"
+
+.deploy:
+  tags: [k8s-deploy]
+  image: harbor.stic.intranet.net/ci/helm-kubectl:1.36.0
+  script:
+    - |
+      cat <<EOF | kubectl create -f - || true
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: $NS
+        labels:
+          pod-security.kubernetes.io/enforce: baseline
+          kubeops/app: "$APP_NAME"
+          kubeops/env: "$ENV_KIND"
+          kubeops/branch: "$CI_COMMIT_REF_SLUG"
+          kubeops/env-slug: "$CI_ENVIRONMENT_SLUG"
+          kubeops/project-id: "$CI_PROJECT_ID"
+      ---
+      apiVersion: v1
+      kind: ResourceQuota
+      metadata: {name: cuota, namespace: $NS}
+      spec:
+        hard:
+          requests.cpu: "1"
+          limits.cpu: "2"
+          requests.memory: 1Gi
+          limits.memory: 2Gi
+          pods: "10"
+          services: "5"
+      ---
+      apiVersion: v1
+      kind: LimitRange
+      metadata: {name: defaults, namespace: $NS}
+      spec:
+        limits:
+          - type: Container
+            default: {cpu: 250m, memory: 256Mi}
+            defaultRequest: {cpu: 50m, memory: 64Mi}
+      EOF
+    - kubectl -n "$NS" create rolebinding ci-deploy --clusterrole=ci-deploy-app --serviceaccount=ci-deploy:ci-deploy-job || true
+    - kubectl -n "$NS" create rolebinding kdev-reader --clusterrole=kdev-reader --serviceaccount=kdev:kdev || true
+    - |
+      # Credenciales de base de datos: las define Sistemas en cada proyecto de GitLab, con ámbito
+      # review/* (ramas) y production. Si la aplicación las declara y no llegan, se para aquí con un
+      # mensaje claro, en lugar de desplegar con un Secret vacío y un error de conexión difícil de entender.
+      echo "Valores aplicados: deploy/values.yaml ${VALUES_EXTRA:-(ningún fichero propio de este entorno)}"
+      VFILES="deploy/values.yaml $(echo "$VALUES_EXTRA" | sed 's/-f //g')"
+      MISSING=""
+      [ -z "$DB_USER" ] && MISSING="$MISSING DB_USER"
+      [ -z "$DB_PASSWORD" ] && MISSING="$MISSING DB_PASSWORD"
+      if [ -n "$MISSING" ] && grep -qsE 'DB_(USER|PASSWORD)' $VFILES; then
+        echo "ERROR: tu aplicación usa credenciales de base de datos, pero en este entorno faltan:$MISSING"
+        echo "Entorno: $CI_ENVIRONMENT_NAME"
+        echo "Pide a Sistemas que las defina en el proyecto (ámbito review/* para ramas, production para producción)."
+        echo "En producción las variables son protegidas: solo llegan a pipelines de ramas protegidas (main)."
+        exit 1
+      fi
+    - kubectl -n "$NS" create secret generic app-db
+        --from-literal=DB_USER="$DB_USER" --from-literal=DB_PASSWORD="$DB_PASSWORD"
+        --dry-run=client -o yaml | kubectl apply -f -
+    - helm upgrade --install "$APP_NAME" "oci://$HARBOR/charts/kubeops-app" --version "$CHART_VERSION"
+        --ca-file "$HARBOR_CA" -n "$NS" -f deploy/values.yaml $VALUES_EXTRA
+        --set app="$APP_NAME" --set image.registry="$HARBOR/$HARBOR_PROJECT" --set image.tag="$IMAGE_TAG"
+        --set ingress.host="$HOST" $HELM_EXTRA --wait --timeout 3m
+
+deploy_review:
+  extends: .deploy
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
+  environment:
+    name: review/$CI_COMMIT_REF_SLUG
+    url: $ENV_SCHEME://$CI_ENVIRONMENT_SLUG-$APP_NAME.$DEV_DOMAIN
+    on_stop: stop_review
+    auto_stop_in: 7 days
+  before_script:
+    - export ENV_KIND=review
+    - export HELM_EXTRA=""
+    - |
+      VALUES_EXTRA=""
+      if [ -f deploy/values-review.yaml ]; then VALUES_EXTRA="-f deploy/values-review.yaml"; fi
+      export VALUES_EXTRA
+    - export NS="app-$APP_NAME-$CI_ENVIRONMENT_SLUG"
+    - export HOST="$CI_ENVIRONMENT_SLUG-$APP_NAME.$DEV_DOMAIN"
+
+stop_review:
+  stage: cleanup
+  tags: [k8s-deploy]
+  image: harbor.stic.intranet.net/ci/helm-kubectl:1.36.0
+  variables:
+    GIT_STRATEGY: none      # la rama puede estar ya borrada
+  rules:
+    - if: $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
+      when: manual
+  environment:
+    name: review/$CI_COMMIT_REF_SLUG
+    action: stop
+  script:
+    - NS="app-$APP_NAME-$CI_ENVIRONMENT_SLUG"
+    - helm uninstall "$APP_NAME" -n "$NS" || true
+    - kubectl delete ns "$NS" --wait=false
+
+deploy_prod:
+  extends: .deploy
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual          # quitar 'when' para despliegue automático al mergear
+  environment:
+    name: production
+    url: $ENV_SCHEME://$APP_NAME.$PROD_DOMAIN
+  before_script:
+    - export ENV_KIND=prod
+    - export HELM_EXTRA="--set replicaCount=2"
+    - |
+      VALUES_EXTRA=""
+      if [ -f deploy/values-prod.yaml ]; then VALUES_EXTRA="-f deploy/values-prod.yaml"; fi
+      export VALUES_EXTRA
+    - export NS="app-$APP_NAME-prod"
+    - export HOST="$APP_NAME.$PROD_DOMAIN"

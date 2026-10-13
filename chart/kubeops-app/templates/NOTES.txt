@@ -1,0 +1,1 @@
+Aplicación {{ .Values.app }} desplegada: http://{{ .Values.ingress.host }}

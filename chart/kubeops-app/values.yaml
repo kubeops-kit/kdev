@@ -1,0 +1,32 @@
+# Valores por defecto de kubeops-app.
+# Los proyectos de los devs sobrescriben solo lo que necesiten en deploy/values.yaml.
+# Los marcados "pipeline" los inyecta ci-template.yml con --set.
+
+app: ""               # pipeline: nombre de la app (APP_NAME)
+replicaCount: 1       # pipeline: en producción se sube con --set
+
+image:
+  registry: harbor.stic.intranet.net/apps   # pipeline
+  tag: ""                                    # pipeline: SHA del commit
+
+ingress:
+  host: ""            # pipeline
+  className: ""       # vacío = clase por defecto (Traefik)
+
+frontend:
+  port: 80
+  healthPath: /
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: 200m, memory: 128Mi }
+
+backend:
+  port: 3000
+  healthPath: /api/health
+  apiPath: /api       # ruta del Ingress que va al backend (no se recorta)
+  secretName: app-db  # Secret que crea el pipeline con DB_USER / DB_PASSWORD
+  env: {}             # variables NO sensibles: { DB_HOST: bd-dev, DB_PORT: "5432" }
+  secretEnv: []       # nombres de claves de ese Secret: [DB_USER, DB_PASSWORD]
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 512Mi }
